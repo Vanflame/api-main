@@ -450,11 +450,20 @@
         }
 
         .login-screen {
+            position: fixed;
+            inset: 0;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px 14px;
+            background: var(--bg);
+            z-index: 9998;
+            overflow: auto;
+        }
+
+        .login-screen.hidden {
+            display: none;
         }
 
         .login-card {
@@ -729,6 +738,11 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
         import {
+            getAuth,
+            onAuthStateChanged,
+            signInAnonymously
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+        import {
             getFirestore,
             collection,
             addDoc,
@@ -736,6 +750,7 @@
             orderBy,
             limit,
             getDocs,
+            getDoc,
             where,
             deleteDoc,
             setDoc,
@@ -768,9 +783,88 @@
         }
 
         let currentUser = null;
+        let firebaseUserUid = null;
+        let lastPredictedData = null;
+        let __remoteDailyCache = new Map();
+        let __remoteDailyPrefetchKeySig = null;
+        let __remoteDailyPrefetchInFlight = false;
         function getUserPrefix() {
             if (!currentUser?.uid) return '__no_user__';
             return `user:${currentUser.uid}`;
+        }
+
+        function predictedCacheKey() {
+            return 'predictedCache';
+        }
+
+        function loadPredictedCache() {
+            const raw = lsGet(predictedCacheKey());
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        }
+
+        function savePredictedCache(data) {
+            try {
+                lsSet(predictedCacheKey(), JSON.stringify(data));
+            } catch {
+                // ignore
+            }
+        }
+
+        async function saveRemotePredictedCache(data) {
+            if (!firebaseUserUid) return;
+            try {
+                await setDoc(doc(db, `Users/${firebaseUserUid}/AppState`, 'predicted'), {
+                    predicted: data,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) {
+                console.error('Failed to save predicted cache to Firestore:', e);
+            }
+        }
+
+        async function loadRemotePredictedCache() {
+            if (!firebaseUserUid) return null;
+            try {
+                const snap = await getDoc(doc(db, `Users/${firebaseUserUid}/AppState`, 'predicted'));
+                if (!snap.exists()) return null;
+                const data = snap.data();
+                return data?.predicted || null;
+            } catch (e) {
+                console.error('Failed to load predicted cache from Firestore:', e);
+                return null;
+            }
+        }
+
+        async function saveRemoteDailyQuests(dayKey, quests) {
+            if (!firebaseUserUid) return;
+            try {
+                await setDoc(doc(db, `Users/${firebaseUserUid}/DailyQuestDays`, dayKey), {
+                    dayKey,
+                    quests,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) {
+                console.error('Failed to save daily quests to Firestore:', e);
+            }
+        }
+
+        async function loadRemoteDailyQuests(dayKey) {
+            if (!firebaseUserUid) return null;
+            try {
+                const snap = await getDoc(doc(db, `Users/${firebaseUserUid}/DailyQuestDays`, dayKey));
+                if (!snap.exists()) return null;
+                const data = snap.data();
+                if (!data || !Array.isArray(data.quests)) return null;
+                return { dayKey, quests: data.quests };
+            } catch (e) {
+                console.error('Failed to load daily quests from Firestore:', e);
+                return null;
+            }
         }
 
         function lsGet(key) {
@@ -797,6 +891,7 @@
             if (loginScreen) loginScreen.classList.add('hidden');
             if (mainNav) mainNav.classList.remove('hidden');
             if (mainWrap) mainWrap.classList.remove('hidden');
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
         }
 
         async function setLoggedInUser(username, passphrase) {
@@ -819,7 +914,7 @@
         }
 
         function getUserScopedPath(collectionName) {
-            const uid = currentUser?.uid;
+            const uid = firebaseUserUid;
             if (!uid) throw new Error('Not logged in');
             return `Users/${uid}/${collectionName}`;
         }
@@ -843,13 +938,29 @@
                 }
 
                 showMainUi();
+
+                lastPredictedData = loadPredictedCache();
+
+                if (!lastPredictedData) {
+                    const remotePred = await loadRemotePredictedCache();
+                    if (remotePred) {
+                        lastPredictedData = remotePred;
+                        savePredictedCache(remotePred);
+                    }
+                }
+
                 const savedToken = lsGet('authToken') || '';
                 const authEl = document.getElementById('auth');
                 if (authEl) authEl.value = savedToken;
+                await autoRefreshDailyQuestsFromPredicted();
                 renderHistory();
                 renderGemsHistory();
                 renderDailyQuests();
             });
+        }
+
+        if (!lastPredictedData) {
+            lastPredictedData = loadPredictedCache();
         }
 
         const firebaseConfig = {
@@ -863,6 +974,21 @@
         };
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const waitForFirebaseAuth = new Promise((resolve) => {
+            onAuthStateChanged(auth, (user) => {
+                firebaseUserUid = user?.uid || null;
+                resolve(user);
+            });
+        });
+
+        try {
+            await signInAnonymously(auth);
+            await waitForFirebaseAuth;
+        } catch (e) {
+            console.error('Firebase anonymous sign-in failed:', e);
+            showToast('Firebase auth failed. Firestore may be blocked by rules.', 'error', 6000);
+        }
         const db = getFirestore(app);
 
         // Week ranges (dynamic)
@@ -993,6 +1119,12 @@
                 return;
             }
 
+            if (!firebaseUserUid) {
+                historyBox.innerHTML = '<div class="red">Firebase is not authenticated yet. Please refresh and try again.</div>';
+                showToast('Firebase not authenticated yet', 'error', 5000);
+                return;
+            }
+
             const useCustom = document.getElementById('useCustomRange')?.checked;
             let start, end;
             if (useCustom) {
@@ -1020,7 +1152,15 @@
                 limit(500)
             );
 
-            const [snapPub, snapPriv] = await Promise.all([getDocs(qPublic), getDocs(qPrivate)]);
+            let snapPub, snapPriv;
+            try {
+                [snapPub, snapPriv] = await Promise.all([getDocs(qPublic), getDocs(qPrivate)]);
+            } catch (e) {
+                console.error('Failed to load history from Firestore:', e);
+                historyBox.innerHTML = `<div class="red">Failed to load history: ${e?.message || e}</div>`;
+                showToast('Failed to load history (check Firestore rules/auth)', 'error', 6000);
+                return;
+            }
             const docs = [...snapPub.docs, ...snapPriv.docs].sort((a, b) => {
                 const ta = a.data().timestamp?.toDate ? a.data().timestamp.toDate().getTime() : new Date(a.data().timestamp).getTime();
                 const tb = b.data().timestamp?.toDate ? b.data().timestamp.toDate().getTime() : new Date(b.data().timestamp).getTime();
@@ -1536,6 +1676,10 @@
             if (window.__liveUnsubPublic) { window.__liveUnsubPublic(); window.__liveUnsubPublic = null; }
             if (window.__liveUnsubPrivate) { window.__liveUnsubPrivate(); window.__liveUnsubPrivate = null; }
 
+            if (!firebaseUserUid) {
+                return;
+            }
+
             const useCustom = document.getElementById('useCustomRange')?.checked;
             let start, end;
             if (useCustom) {
@@ -1565,8 +1709,22 @@
             );
 
             if (enabled) {
-                window.__liveUnsubPublic = onSnapshot(qLivePublic, () => { renderHistory(); });
-                window.__liveUnsubPrivate = onSnapshot(qLivePrivate, () => { renderHistory(); });
+                window.__liveUnsubPublic = onSnapshot(
+                    qLivePublic,
+                    () => { renderHistory(); },
+                    (err) => {
+                        console.error('Live update (public) error:', err);
+                        showToast('Live update failed: ' + (err?.message || err), 'error', 5000);
+                    }
+                );
+                window.__liveUnsubPrivate = onSnapshot(
+                    qLivePrivate,
+                    () => { renderHistory(); },
+                    (err) => {
+                        console.error('Live update (private) error:', err);
+                        showToast('Live update failed: ' + (err?.message || err), 'error', 5000);
+                    }
+                );
             }
         }
         applyLiveUpdates();
@@ -1584,8 +1742,22 @@
                 return;
             }
 
+            if (!firebaseUserUid) {
+                historyBox.innerHTML = '<div class="red">Firebase is not authenticated yet. Please refresh and try again.</div>';
+                showToast('Firebase not authenticated yet', 'error', 5000);
+                return;
+            }
+
             const q = query(collection(db, getUserScopedPath("GemsCheckerHistory")), orderBy("timestamp", "desc"), limit(100));
-            const querySnapshot = await getDocs(q);
+            let querySnapshot;
+            try {
+                querySnapshot = await getDocs(q);
+            } catch (e) {
+                console.error('Failed to load gems history from Firestore:', e);
+                historyBox.innerHTML = `<div class="red">Failed to load gems history: ${e?.message || e}</div>`;
+                showToast('Failed to load gems history (check Firestore rules/auth)', 'error', 6000);
+                return;
+            }
 
             if (querySnapshot.empty) {
                 historyBox.textContent = "⚠️ No history yet.";
@@ -1826,6 +1998,30 @@
             return `${y}-${m}-${d}`;
         }
 
+        function getDailyResetKeyUtcForDate(dateUtc, resetHourUtc) {
+            const t = dateUtc instanceof Date ? dateUtc.getTime() : new Date(dateUtc).getTime();
+            const shifted = new Date(t - resetHourUtc * 60 * 60 * 1000);
+            const y = shifted.getUTCFullYear();
+            const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(shifted.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatShortMonthDayUtc(dateUtc) {
+            const d = dateUtc instanceof Date ? dateUtc : new Date(dateUtc);
+            return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', timeZone: 'UTC' });
+        }
+
+        function addDaysUtc(dateUtc, days) {
+            const d = dateUtc instanceof Date ? dateUtc : new Date(dateUtc);
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days, 0, 0, 0));
+        }
+
+        function addDaysAtResetUtc(dateUtc, days, resetHourUtc) {
+            const d = dateUtc instanceof Date ? dateUtc : new Date(dateUtc);
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days, resetHourUtc, 0, 0));
+        }
+
         function getNextResetUtc(resetHourUtc) {
             const now = new Date();
             const y = now.getUTCFullYear();
@@ -1872,6 +2068,39 @@
             return `dailyQuests:${dayKey}`;
         }
 
+        function loadDailyQuestsForDay(dayKey) {
+            const raw = lsGet(dailyStorageKey(dayKey));
+            if (!raw) return { dayKey, quests: [] };
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed || !Array.isArray(parsed.quests)) return { dayKey, quests: [] };
+                return { dayKey, quests: parsed.quests };
+            } catch {
+                return { dayKey, quests: [] };
+            }
+        }
+
+        function kickoffRemoteDailyPrefetch(dayKeys) {
+            if (!firebaseUserUid) return;
+            if (!Array.isArray(dayKeys) || !dayKeys.length) return;
+            const sig = dayKeys.join('|');
+            if (__remoteDailyPrefetchInFlight) return;
+            if (__remoteDailyPrefetchKeySig === sig) return;
+            __remoteDailyPrefetchKeySig = sig;
+            __remoteDailyPrefetchInFlight = true;
+            Promise.all(dayKeys.map(async (k) => {
+                if (__remoteDailyCache.has(k)) return;
+                const remote = await loadRemoteDailyQuests(k);
+                if (remote?.quests) {
+                    __remoteDailyCache.set(k, remote.quests);
+                }
+            }))
+                .finally(() => {
+                    __remoteDailyPrefetchInFlight = false;
+                    renderDailyQuests();
+                });
+        }
+
         function loadDailyQuestsForToday() {
             const dayKey = getDailyResetKeyUtc(3);
             const raw = lsGet(dailyStorageKey(dayKey));
@@ -1900,45 +2129,170 @@
                 return;
             }
 
-            const { dayKey, quests } = loadDailyQuestsForToday();
             const nextReset = getNextResetUtc(3);
             const remaining = nextReset.getTime() - Date.now();
-            resetInfo.textContent = `Resets 03:00 UTC (${dayKey}) — Resets in ${formatCountdown(remaining)}`;
+            const todayKey = getDailyResetKeyUtc(3);
 
-            if (!quests.length) {
-                list.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">No daily quests loaded yet.</div>';
+            const periodStartRaw = lastPredictedData?.completionPeriodStartDate;
+            const periodEndRaw = lastPredictedData?.completionPeriodEndDate;
+            const periodStart = periodStartRaw ? new Date(periodStartRaw) : null;
+            const periodEnd = periodEndRaw ? new Date(periodEndRaw) : null;
+
+            const hasPeriod = !!(periodStart && periodEnd && !isNaN(periodStart.getTime()) && !isNaN(periodEnd.getTime()));
+            if (hasPeriod) {
+                resetInfo.textContent = `${formatShortMonthDayUtc(periodStart)} – ${formatShortMonthDayUtc(addDaysUtc(periodEnd, -1))} (03:00 UTC reset) — Resets in ${formatCountdown(remaining)}`;
+            } else {
+                resetInfo.textContent = `Resets 03:00 UTC (${todayKey}) — Resets in ${formatCountdown(remaining)}`;
+            }
+
+            if (!lastPredictedData?.games || !Array.isArray(lastPredictedData.games)) {
+                const { quests } = loadDailyQuestsForToday();
+                if (!quests.length) {
+                    list.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">No daily quests loaded yet.</div>';
+                    return;
+                }
+            }
+
+            const dayCols = [];
+            if (hasPeriod) {
+                const base = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), periodStart.getUTCDate(), 3, 0, 0));
+                for (let i = 0; i < 7; i++) {
+                    const d = addDaysAtResetUtc(base, i, 3);
+                    const key = getDailyResetKeyUtcForDate(d, 3);
+                    dayCols.push({ date: d, key, label: formatShortMonthDayUtc(d) });
+                }
+            } else {
+                const base = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 3, 0, 0));
+                for (let i = 0; i < 7; i++) {
+                    const d = addDaysAtResetUtc(base, i, 3);
+                    const key = getDailyResetKeyUtcForDate(d, 3);
+                    dayCols.push({ date: d, key, label: formatShortMonthDayUtc(d) });
+                }
+            }
+
+            kickoffRemoteDailyPrefetch(dayCols.map(d => d.key));
+
+            const container = document.createElement('div');
+            container.style.display = 'grid';
+            container.style.gap = '12px';
+
+            const games = (lastPredictedData?.games && Array.isArray(lastPredictedData.games)) ? lastPredictedData.games : [];
+            const fallback = games.length ? null : [{ name: 'Daily Quests', icon: '', quests: loadDailyQuestsForToday().quests.map(q => ({ name: q.name, refreshPeriodHours: 24, weeklyPoints: q.points })) }];
+            const gamesToRender = games.length ? games : fallback;
+
+            (gamesToRender || []).forEach(game => {
+                const dailyQuests = Array.isArray(game?.quests) ? game.quests.filter(q => q?.refreshPeriodHours === 24) : [];
+                if (!dailyQuests.length) return;
+
+                const card = document.createElement('div');
+                card.style.border = '1px solid var(--border)';
+                card.style.borderRadius = '12px';
+                card.style.background = 'var(--card)';
+                card.style.padding = '10px';
+
+                const header = document.createElement('div');
+                header.style.display = 'flex';
+                header.style.alignItems = 'center';
+                header.style.gap = '10px';
+                header.style.marginBottom = '10px';
+
+                if (game?.icon) {
+                    const img = document.createElement('img');
+                    img.src = game.icon;
+                    img.alt = '';
+                    img.style.width = '22px';
+                    img.style.height = '22px';
+                    img.style.borderRadius = '6px';
+                    header.appendChild(img);
+                }
+                const title = document.createElement('div');
+                title.style.fontWeight = '700';
+                title.textContent = game?.name || 'Unknown Game';
+                header.appendChild(title);
+                card.appendChild(header);
+
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+
+                const thead = document.createElement('thead');
+                const trh = document.createElement('tr');
+                const thQuest = document.createElement('th');
+                thQuest.textContent = 'Quest';
+                thQuest.style.textAlign = 'left';
+                thQuest.style.padding = '8px 6px';
+                thQuest.style.borderBottom = '1px solid var(--border)';
+                trh.appendChild(thQuest);
+
+                dayCols.forEach(dc => {
+                    const th = document.createElement('th');
+                    th.textContent = dc.label;
+                    th.style.textAlign = 'center';
+                    th.style.padding = '8px 6px';
+                    th.style.borderBottom = '1px solid var(--border)';
+                    th.style.whiteSpace = 'nowrap';
+                    trh.appendChild(th);
+                });
+                thead.appendChild(trh);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+
+                dailyQuests.forEach(q => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid rgba(39, 49, 79, 0.55)';
+
+                    const tdName = document.createElement('td');
+                    tdName.style.padding = '8px 6px';
+                    tdName.textContent = (q?.name || '').trim();
+                    tr.appendChild(tdName);
+
+                    dayCols.forEach(dc => {
+                        const td = document.createElement('td');
+                        td.style.padding = '8px 6px';
+                        td.style.textAlign = 'center';
+
+                        const store = loadDailyQuestsForDay(dc.key);
+                        const remoteForDay = __remoteDailyCache.get(dc.key);
+                        const useQuests = (remoteForDay && Array.isArray(remoteForDay) && remoteForDay.length) ? remoteForDay : store.quests;
+                        const found = useQuests.find(x => (x?.name || '') === tdName.textContent);
+                        const checked = !!(found?.completed || found?.autoCompleted);
+
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.checked = checked;
+                        cb.disabled = (dc.key !== todayKey) || !!found?.autoCompleted;
+                        cb.addEventListener('change', () => {
+                            const dayStore = loadDailyQuestsForDay(dc.key);
+                            const idx = dayStore.quests.findIndex(x => (x?.name || '') === tdName.textContent);
+                            if (idx === -1) {
+                                dayStore.quests.push({ name: tdName.textContent, points: (q.weeklyPoints ?? q.points ?? 0), completed: cb.checked, autoCompleted: false });
+                            } else {
+                                dayStore.quests[idx].completed = cb.checked;
+                            }
+                            saveDailyQuestsForToday(dc.key, dayStore.quests);
+                            __remoteDailyCache.set(dc.key, dayStore.quests);
+                            saveRemoteDailyQuests(dc.key, dayStore.quests);
+                        });
+                        td.appendChild(cb);
+                        tr.appendChild(td);
+                    });
+
+                    tbody.appendChild(tr);
+                });
+
+                table.appendChild(tbody);
+                card.appendChild(table);
+                container.appendChild(card);
+            });
+
+            if (!container.children.length) {
+                list.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">No daily quests found in predicted.</div>';
                 return;
             }
 
             list.innerHTML = '';
-            quests.forEach((q, idx) => {
-                const row = document.createElement('div');
-                row.className = 'daily-quest-item';
-
-                const left = document.createElement('div');
-                left.className = 'daily-quest-name';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.checked = !!q.completed || !!q.autoCompleted;
-                cb.addEventListener('change', () => {
-                    const { dayKey: dk, quests: current } = loadDailyQuestsForToday();
-                    if (!current[idx]) return;
-                    current[idx].completed = cb.checked;
-                    saveDailyQuestsForToday(dk, current);
-                });
-                const name = document.createElement('span');
-                name.textContent = q.name;
-                left.appendChild(cb);
-                left.appendChild(name);
-
-                const right = document.createElement('div');
-                right.className = 'daily-quest-points';
-                right.textContent = String(q.points ?? 0);
-
-                row.appendChild(left);
-                row.appendChild(right);
-                list.appendChild(row);
-            });
+            list.appendChild(container);
         }
 
         const dailyBtn = document.getElementById('dailyQuestParseBtn');
@@ -1978,6 +2332,129 @@
             const savedToken = lsGet('authToken') || '';
             const authEl = document.getElementById('auth');
             if (authEl) authEl.value = savedToken;
+            autoRefreshDailyQuestsFromPredicted();
+            renderDailyQuests();
+        }
+
+        {
+            const authEl = document.getElementById('auth');
+            if (authEl) {
+                let __authSaveTimer = null;
+                authEl.addEventListener('input', () => {
+                    if (!currentUser?.uid) return;
+                    clearTimeout(__authSaveTimer);
+                    __authSaveTimer = setTimeout(async () => {
+                        const token = authEl.value.trim();
+                        if (!token) return;
+                        lsSet('authToken', token);
+                        lastPredictedData = loadPredictedCache();
+                        await autoRefreshDailyQuestsFromPredicted();
+                        renderDailyQuests();
+                    }, 600);
+                });
+            }
+        }
+
+        async function autoRefreshDailyQuestsFromPredicted() {
+            if (!currentUser?.uid) return;
+
+            const token = (lsGet('authToken') || '').trim();
+            if (!token) return;
+
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json, text/plain, */*',
+                'Access-Control-Allow-Origin': '*',
+                'Origin': 'https://play.immutable.com',
+                'Referer': 'https://play.immutable.com/'
+            };
+
+            let statsRes;
+            try {
+                statsRes = await fetch('https://api.immutable.com/v3/rewards/sweepstakes/user-stats/predicted', { method: 'GET', headers });
+            } catch (e) {
+                console.error('Failed to fetch predicted for daily quests:', e);
+                return;
+            }
+
+            if (!statsRes.ok) {
+                return;
+            }
+
+            let statsData;
+            try {
+                statsData = await statsRes.json();
+            } catch (e) {
+                console.error('Failed to parse predicted JSON:', e);
+                return;
+            }
+
+            const predictedSlim = {
+                completionPeriodStartDate: statsData?.completionPeriodStartDate || null,
+                completionPeriodEndDate: statsData?.completionPeriodEndDate || null,
+                games: Array.isArray(statsData?.games)
+                    ? statsData.games.map(g => ({
+                        name: g?.name || 'Unknown Game',
+                        icon: g?.icon || '',
+                        quests: Array.isArray(g?.quests)
+                            ? g.quests.filter(q => q?.refreshPeriodHours === 24).map(q => ({
+                                name: (q?.name || '').trim(),
+                                refreshPeriodHours: q?.refreshPeriodHours,
+                                weeklyPoints: (q.weeklyPoints ?? q.points ?? 0)
+                            }))
+                            : []
+                    }))
+                    : []
+            };
+
+            lastPredictedData = predictedSlim;
+            savePredictedCache(predictedSlim);
+            saveRemotePredictedCache(predictedSlim);
+
+            const nextReset = getNextResetUtc(3);
+            const resetStart = new Date(nextReset.getTime() - 24 * 60 * 60 * 1000);
+            const dayKey = getDailyResetKeyUtc(3);
+
+            const daily = [];
+            if (statsData?.games && Array.isArray(statsData.games)) {
+                statsData.games.forEach(game => {
+                    if (!game?.quests || !Array.isArray(game.quests)) return;
+                    game.quests.forEach(q => {
+                        if (q?.refreshPeriodHours !== 24) return;
+                        const points = (q.weeklyPoints ?? q.points ?? 0);
+                        const autoCompleted = points === 0;
+                        let completed = false;
+                        if (q.lastCompletedAt) {
+                            const t = new Date(q.lastCompletedAt);
+                            completed = (t >= resetStart && t < nextReset) || (q.timesCompleted && q.timesCompleted > 0);
+                        } else {
+                            completed = !!(q.timesCompleted && q.timesCompleted > 0);
+                        }
+                        const name = (q.name || '').trim();
+                        if (!name) return;
+                        daily.push({ name, points, autoCompleted, completed });
+                    });
+                });
+            }
+
+            if (!daily.length) {
+                saveDailyQuestsForToday(dayKey, []);
+                renderDailyQuests();
+                return;
+            }
+
+            const existing = loadDailyQuestsForToday().quests;
+            const merged = daily.map(d => {
+                const found = existing.find(e => (e?.name || '') === d.name);
+                return {
+                    name: d.name,
+                    points: d.points,
+                    autoCompleted: d.autoCompleted,
+                    completed: (d.autoCompleted ? true : (d.completed || (found?.completed || false)))
+                };
+            });
+
+            saveDailyQuestsForToday(dayKey, merged);
             renderDailyQuests();
         }
 
