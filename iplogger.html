@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Web Fingerprints</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            --bg: #0f1320;
+            --card: #151a2b;
+            --muted: #aab3c5;
+            --text: #e8ecf3;
+            --accent: #7aa2ff;
+            --good: #2fbf71;
+            --bad: #ff5c5c;
+            --warn: #ffb74d;
+            --chip: #1b2240;
+            --border: #27314f;
+            --shadow: 0 4px 12px rgba(0, 0, 0, .25);
+            --radius: 12px;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, sans-serif;
+            background: linear-gradient(180deg, #131a2b, #0f1320);
+            color: var(--text);
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            background: #101529;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .tab-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .tab-btn:hover {
+            border-color: var(--accent);
+            background: #1a2244;
+        }
+
+        .wrap {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 20px 14px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        h2 {
+            margin: 0 0 12px;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .mono {
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: .9rem;
+            word-break: break-all;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--chip);
+            color: var(--text);
+            border: 1px solid var(--border);
+            font-weight: 600;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        .btn:hover {
+            background: #1a2244;
+            border-color: var(--accent);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #0b1024;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-size: .8rem;
+            margin-right: 6px;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        .alert-ok {
+            background: rgba(47, 191, 113, .12);
+            border-color: rgba(47, 191, 113, .4);
+            color: var(--good);
+        }
+
+        .alert-warn {
+            background: rgba(255, 183, 77, .12);
+            border-color: rgba(255, 183, 77, .45);
+            color: #ffcc80;
+        }
+
+        .alert-strong {
+            background: rgba(255, 92, 92, .12);
+            border-color: rgba(255, 92, 92, .45);
+            color: var(--bad);
+        }
+
+        .kv {
+            margin: 6px 0;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: .9rem;
+        }
+
+        .history-entry {
+            border: 1px solid var(--border);
+            background: #131a36;
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 0.85rem;
+        }
+
+        .progress-container {
+            width: 100%;
+            background: #0b1024;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 14px;
+            background: var(--accent);
+            transition: width .3s ease;
+        }
+
+        a.inline {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a.inline:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Nav -->
+    <div class="nav">
+        <a href="index.html"><button class="tab-btn">← Back to Main</button></a>
+        <button class="tab-btn" disabled>Web Fingerprints</button>
+        <a href="https://play.immutable.com/rewards/" target="_blank" rel="noopener">
+            <button class="tab-btn">Immutable Rewards ↗</button>
+        </a>
+        <a href="https://pixelscan.net/fingerprint-check" target="_blank" rel="noopener">
+            <button class="tab-btn">PixelScan ↗</button>
+        </a>
+    </div>
+
+    <div class="wrap">
+        <div class="card">
+            <h2>Fingerprint Collector</h2>
+            <p class="muted">Collects only: <span class="badge">IP</span><span class="badge">Canvas</span><span
+                    class="badge">WebGL</span><span class="badge">AudioContext</span></p>
+
+            <div class="row">
+                <button id="btnCollect" class="btn">Collect & Compare</button>
+                <button id="btnSave" class="btn" disabled>Save to Firestore</button>
+            </div>
+
+            <div id="loader" style="display:none; margin-top:10px;">
+                <div class="progress-container">
+                    <div id="bar" class="progress-bar"></div>
+                </div>
+                <div id="ptext" class="muted"></div>
+            </div>
+
+            <div id="results" class="card" style="display:none;">
+                <div class="kv"><strong>IP:</strong> <span id="ip" class="mono"></span></div>
+                <div class="kv"><strong>Canvas:</strong> <span id="canvas" class="mono"></span></div>
+                <div class="kv"><strong>WebGL:</strong> <span id="webgl" class="mono"></span></div>
+                <div class="kv"><strong>Audio:</strong> <span id="audio" class="mono"></span></div>
+                <div class="kv"><strong>Combined:</strong> <span id="combined" class="mono"></span></div>
+
+                <div id="verdict" class="alert alert-ok" style="display:none;"></div>
+                <div class="muted" style="margin-top:8px;">
+                    Rules: Mild warning if only <strong>IP</strong> matches history. Strong warning if
+                    <strong>Canvas</strong>, <strong>WebGL</strong>, or <strong>Audio</strong> matches.
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>History (recent matches)</h2>
+            <div id="history"></div>
+        </div>
+    </div>
+
+    <!-- Firebase + Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import {
+            getFirestore,
+            collection,
+            addDoc,
+            query,
+            where,
+            orderBy,
+            limit,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+        // --- Firebase Config (same project as index.html) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0fUKA2kpoW9hHEWKcRqxjX-m-ZBFRpVM",
+            authDomain: "immutable-api.firebaseapp.com",
+            projectId: "immutable-api",
+            storageBucket: "immutable-api.firebasestorage.app",
+            messagingSenderId: "839008159453",
+            appId: "1:839008159453:web:f57d46599dadd29dafbd34",
+            measurementId: "G-EH5P3LS1B6"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- UI refs ---
+        const btnCollect = document.getElementById('btnCollect');
+        const btnSave = document.getElementById('btnSave');
+        const loader = document.getElementById('loader');
+        const bar = document.getElementById('bar');
+        const ptext = document.getElementById('ptext');
+        const resultsCard = document.getElementById('results');
+        const verdictEl = document.getElementById('verdict');
+        const ipEl = document.getElementById('ip');
+        const canvasEl = document.getElementById('canvas');
+        const webglEl = document.getElementById('webgl');
+        const audioEl = document.getElementById('audio');
+        const combinedEl = document.getElementById('combined');
+        const historyBox = document.getElementById('history');
+
+        // --- helpers ---
+        function setProgress(p, text) {
+            bar.style.width = p + '%';
+            ptext.textContent = text || '';
+        }
+        async function sha256(str) {
+            const enc = new TextEncoder();
+            const data = enc.encode(str);
+            const buf = await crypto.subtle.digest('SHA-256', data);
+            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function getIP() {
+            try {
+                const res = await fetch("https://api.ipify.org?format=json");
+                const { ip } = await res.json();
+                return ip || "Unknown";
+            } catch {
+                return "Unknown";
+            }
+        }
+
+        async function canvasFingerprint() {
+            const c = document.createElement('canvas');
+            const ctx = c.getContext('2d');
+            c.width = 220; c.height = 60;
+            ctx.textBaseline = 'top';
+            ctx.font = "16px 'Arial'";
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(0, 0, 220, 60);
+            ctx.fillStyle = '#069';
+            ctx.fillText('fp-test 🎮 測試 Ω≈ç', 2, 2);
+            ctx.strokeStyle = '#fff';
+            ctx.arc(100, 30, 20, 0, Math.PI * 1.5);
+            ctx.stroke();
+            // Hash pixel data for stability across toDataURL impls
+            const data = ctx.getImageData(0, 0, c.width, c.height).data;
+            // Sample every 10th byte to keep it light
+            let acc = '';
+            for (let i = 0; i < data.length; i += 10) acc += data[i].toString(16);
+            return await sha256(acc);
+        }
+
+        async function webglFingerprint() {
+            const c = document.createElement('canvas');
+            const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+            if (!gl) return 'no-webgl';
+            const params = [];
+            const glParams = [
+                gl.ALIASED_LINE_WIDTH_RANGE, gl.ALIASED_POINT_SIZE_RANGE,
+                gl.MAX_COLOR_ATTACHMENTS, gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS,
+                gl.MAX_CUBE_MAP_TEXTURE_SIZE, gl.MAX_FRAGMENT_UNIFORM_VECTORS,
+                gl.MAX_RENDERBUFFER_SIZE, gl.MAX_TEXTURE_IMAGE_UNITS,
+                gl.MAX_TEXTURE_SIZE, gl.MAX_VARYING_VECTORS,
+                gl.MAX_VERTEX_ATTRIBS, gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS,
+                gl.MAX_VERTEX_UNIFORM_VECTORS, gl.MAX_VIEWPORT_DIMS,
+                gl.RENDERER, gl.SHADING_LANGUAGE_VERSION, gl.VENDOR, gl.VERSION
+            ];
+            for (const p of glParams) {
+                try {
+                    const v = gl.getParameter(p);
+                    params.push(Array.isArray(v) ? v.join(',') : String(v));
+                } catch { }
+            }
+            // Unmasked vendor/renderer if available
+            try {
+                const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                if (ext) {
+                    params.push('UNMASKED_VENDOR:' + gl.getParameter(ext.UNMASKED_VENDOR_WEBGL));
+                    params.push('UNMASKED_RENDERER:' + gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+                }
+            } catch { }
+            return await sha256(params.join('|'));
+        }
+
+        async function audioFingerprint() {
+            try {
+                const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
+                const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = 10000;
+
+                const comp = ctx.createDynamicsCompressor();
+                comp.threshold.value = -50;
+                comp.knee.value = 40;
+                comp.ratio.value = 12;
+                comp.attack.value = 0;
+                comp.release.value = .25;
+
+                osc.connect(comp);
+                comp.connect(ctx.destination);
+                osc.start(0);
+
+                const buffer = await ctx.startRendering();
+                let ch = buffer.getChannelData(0);
+                // Sample a subset deterministically
+                let sig = '';
+                for (let i = 0; i < ch.length; i += 441) { // every 10ms
+                    // clamp to 3 decimals to reduce floating noise
+                    sig += Math.round(ch[i] * 1000) / 1000 + ',';
+                }
+                return await sha256(sig);
+            } catch {
+                return 'no-audio';
+            }
+        }
+
+        async function collectAll() {
+            loader.style.display = 'block';
+            setProgress(5, 'Fetching IP…');
+            const ip = await getIP();
+
+            setProgress(30, 'Rendering Canvas…');
+            const can = await canvasFingerprint();
+
+            setProgress(55, 'Querying WebGL…');
+            const web = await webglFingerprint();
+
+            setProgress(80, 'Rendering Audio…');
+            const aud = await audioFingerprint();
+
+            const combined = await sha256([ip, can, web, aud].join('|'));
+
+            // Populate UI
+            ipEl.textContent = ip;
+            canvasEl.textContent = can;
+            webglEl.textContent = web;
+            audioEl.textContent = aud;
+            combinedEl.textContent = combined;
+            resultsCard.style.display = 'block';
+            btnSave.disabled = false;
+            setProgress(100, 'Done');
+            return { ip, canvas: can, webgl: web, audio: aud, combined };
+        }
+
+        async function saveToFirestore(payload) {
+            await addDoc(collection(db, "FingerprintLogs"), {
+                ...payload,
+                userAgent: navigator.userAgent,
+                timestamp: new Date()
+            });
+        }
+
+        // Look up matches by fields (efficient equality queries)
+        async function findMatches({ ip, canvas, webgl, audio }) {
+            const col = collection(db, "FingerprintLogs");
+
+            const [ipSnap, canSnap, webSnap, audSnap] = await Promise.all([
+                getDocs(query(col, where('ip', '==', ip), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('canvas', '==', canvas), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('webgl', '==', webgl), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('audio', '==', audio), orderBy('timestamp', 'desc'), limit(25))),
+            ]);
+
+            const toList = (snap, label) => snap.docs.map(d => {
+                const data = d.data();
+                return {
+                    label,
+                    ip: data.ip,
+                    canvas: data.canvas,
+                    webgl: data.webgl,
+                    audio: data.audio,
+                    when: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp)
+                };
+            });
+
+            return {
+                ipMatches: toList(ipSnap, 'IP'),
+                canvasMatches: toList(canSnap, 'Canvas'),
+                webglMatches: toList(webSnap, 'WebGL'),
+                audioMatches: toList(audSnap, 'Audio')
+            };
+        }
+
+        function renderHistoryLists(matches) {
+            historyBox.innerHTML = '';
+            const any = matches.ipMatches.length + matches.canvasMatches.length + matches.webglMatches.length + matches.audioMatches.length;
+
+            if (!any) {
+                historyBox.textContent = 'No recent matching entries found.';
+                return;
+            }
+
+            const addGroup = (title, arr) => {
+                if (!arr.length) return;
+                const wrap = document.createElement('div');
+                wrap.className = 'history-entry';
+                const items = arr.map(e =>
+                    `🕒 ${e.when.toLocaleString()} — ${title} match — IP ${e.ip?.slice(0, 8) || 'Unknown'}…`
+                ).join('<br>');
+                wrap.innerHTML = `<strong>${title} Matches (${arr.length})</strong><br>${items}`;
+                historyBox.appendChild(wrap);
+            };
+
+            addGroup('Canvas', matches.canvasMatches);
+            addGroup('WebGL', matches.webglMatches);
+            addGroup('Audio', matches.audioMatches);
+            addGroup('IP', matches.ipMatches);
+        }
+
+        function decideVerdict(matches) {
+            const strong = matches.canvasMatches.length || matches.webglMatches.length || matches.audioMatches.length;
+            const mild = !strong && matches.ipMatches.length;
+
+            verdictEl.style.display = 'block';
+            verdictEl.className = 'alert ' + (strong ? 'alert-strong' : mild ? 'alert-warn' : 'alert-ok');
+
+            if (strong) {
+                verdictEl.textContent = '🚨 Strong warning: Canvas and/or WebGL and/or Audio fingerprint matches were found in history.';
+            } else if (mild) {
+                verdictEl.textContent = '⚠️ Mild warning: Only the IP address matches previous records.';
+            } else {
+                verdictEl.textContent = '✅ No matches in history.';
+            }
+        }
+
+        // --- Wire up ---
+        let lastPayload = null;
+
+        btnCollect.addEventListener('click', async () => {
+            verdictEl.style.display = 'none';
+            btnSave.disabled = true;
+            setProgress(0, '');
+            const payload = await collectAll();
+            lastPayload = payload;
+
+            setProgress(90, 'Comparing with history…');
+            const matches = await findMatches(payload);
+            decideVerdict(matches);
+            renderHistoryLists(matches);
+            setProgress(100, 'Ready');
+        });
+
+        btnSave.addEventListener('click', async () => {
+            if (!lastPayload) return;
+            btnSave.disabled = true;
+            setProgress(15, 'Saving to Firestore…');
+            try {
+                await saveToFirestore(lastPayload);
+                setProgress(100, 'Saved');
+                verdictEl.insertAdjacentHTML('afterend',
+                    '<div class="alert alert-ok" style="margin-top:8px;">Saved to Firestore.</div>');
+            } catch (e) {
+                verdictEl.insertAdjacentHTML('afterend',
+                    '<div class="alert alert-strong" style="margin-top:8px;">Save failed.</div>');
+                console.error(e);
+            } finally {
+                setTimeout(() => { bar.style.width = '0%'; ptext.textContent = ''; loader.style.display = 'none'; }, 600);
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Web Fingerprints</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            --bg: #0f1320;
+            --card: #151a2b;
+            --muted: #aab3c5;
+            --text: #e8ecf3;
+            --accent: #7aa2ff;
+            --good: #2fbf71;
+            --bad: #ff5c5c;
+            --warn: #ffb74d;
+            --chip: #1b2240;
+            --border: #27314f;
+            --shadow: 0 4px 12px rgba(0, 0, 0, .25);
+            --radius: 12px;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, sans-serif;
+            background: linear-gradient(180deg, #131a2b, #0f1320);
+            color: var(--text);
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            background: #101529;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .tab-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .tab-btn:hover {
+            border-color: var(--accent);
+            background: #1a2244;
+        }
+
+        .wrap {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 20px 14px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        h2 {
+            margin: 0 0 12px;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .mono {
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: .9rem;
+            word-break: break-all;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--chip);
+            color: var(--text);
+            border: 1px solid var(--border);
+            font-weight: 600;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        .btn:hover {
+            background: #1a2244;
+            border-color: var(--accent);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #0b1024;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-size: .8rem;
+            margin-right: 6px;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        .alert-ok {
+            background: rgba(47, 191, 113, .12);
+            border-color: rgba(47, 191, 113, .4);
+            color: var(--good);
+        }
+
+        .alert-warn {
+            background: rgba(255, 183, 77, .12);
+            border-color: rgba(255, 183, 77, .45);
+            color: #ffcc80;
+        }
+
+        .alert-strong {
+            background: rgba(255, 92, 92, .12);
+            border-color: rgba(255, 92, 92, .45);
+            color: var(--bad);
+        }
+
+        .kv {
+            margin: 6px 0;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: .9rem;
+        }
+
+        .history-entry {
+            border: 1px solid var(--border);
+            background: #131a36;
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 0.85rem;
+        }
+
+        .progress-container {
+            width: 100%;
+            background: #0b1024;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 14px;
+            background: var(--accent);
+            transition: width .3s ease;
+        }
+
+        a.inline {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a.inline:hover {
+            text-decoration: underline;
+        }
+
+        .input-block {
+            margin-bottom: 18px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-label {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .input-textarea {
+            width: 96.5%;
+            padding: 12px;
+            border-radius: var(--radius);
+            background: #1b2240;
+            color: var(--text);
+            border: 1px solid var(--border);
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: .9rem;
+            resize: vertical;
+            min-height: 150px;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .input-textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(122, 162, 255, 0.3);
+        }
+
+        .mt {
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Nav -->
+    <div class="nav">
+        <a href="index.html"><button class="tab-btn">← Back to Main</button></a>
+        <button class="tab-btn" disabled>Web Fingerprints</button>
+        <a href="https://pixelscan.net/fingerprint-check" target="_blank" rel="noopener">
+            <button class="tab-btn">PixelScan ↗</button>
+        </a>
+        <a href="https://play.immutable.com/rewards/" target="_blank" rel="noopener">
+            <button class="tab-btn">Immutable Rewards ↗</button>
+        </a>
+        <a href="https://www.mightandmagicfates.com/" target="_blank" rel="noopener">
+            <button class="tab-btn">Fate and Magic Register ↗</button>
+        </a>
+
+    </div>
+
+    <div class="wrap">
+        <div class="card">
+            <h2>Fingerprint Collector</h2>
+            <p class="muted">Collects only: <span class="badge">IP</span><span class="badge">Canvas</span><span
+                    class="badge">WebGL</span><span class="badge">AudioContext</span></p>
+            <div class="input-block">
+                <label for="rawInput" class="input-label">Paste Hardware Fingerprint</label>
+                <textarea id="rawInput" rows="8" class="input-textarea"
+                    placeholder="Paste the raw hardware fingerprint block here..."></textarea>
+                <button id="btnParseRaw" class="btn mt">Compare & Save</button>
+            </div>
+
+            <!-- <div class="card">
+                <h2>Bulk Import IPs</h2>
+                <p class="muted">Click once to import all predefined IPs into the <code>FingerprintLogs</code>
+                    collection.</p>
+                <button id="btnImportIPs" class="btn">🚀 Import IPs</button>
+                <div id="importStatus" class="muted" style="margin-top:10px;"></div>
+            </div> -->
+
+
+
+            <div id="loader" style="display:none; margin-top:10px;">
+                <div class="progress-container">
+                    <div id="bar" class="progress-bar"></div>
+                </div>
+                <div id="ptext" class="muted"></div>
+            </div>
+
+            <div id="results" class="card" style="display:none;">
+                <div class="kv">
+                    <strong>IP:</strong>
+                    <span id="ip" class="mono"></span>
+                    <button id="copyIpBtn" class="btn"
+                        style="width:auto; padding:4px 8px; margin-left:8px; font-size:0.8rem;">
+                        📋 Copy
+                    </button>
+                    <button id="deleteCurrentBtn" class="btn mt" style="width:auto; padding:6px 12px; margin-top:12px;">
+                        🗑 Delete This Entry
+                    </button>
+
+                </div>
+
+                <div class="kv"><strong>Canvas:</strong> <span id="canvas" class="mono"></span></div>
+                <div class="kv"><strong>WebGL:</strong> <span id="webgl" class="mono"></span></div>
+                <div class="kv"><strong>Audio:</strong> <span id="audio" class="mono"></span></div>
+                <div class="kv"><strong>WebGL Vendor:</strong> <span id="webglVendor" class="mono"></span></div>
+                <div class="kv"><strong>WebGL Renderer:</strong> <span id="webglRenderer" class="mono"></span></div>
+                <div class="kv"><strong>WebGL Version:</strong> <span id="webglVersion" class="mono"></span></div>
+                <div class="kv"><strong>Combined:</strong> <span id="combined" class="mono"></span></div>
+
+                <div id="verdict" class="alert alert-ok" style="display:none;"></div>
+            </div>
+
+        </div>
+
+        <div class="card">
+            <h2>History (recent matches)</h2>
+            <div id="history"></div>
+        </div>
+        <div class="card">
+            <h2>Full History (latest 50)</h2>
+            <div id="fullHistory"></div>
+        </div>
+
+    </div>
+
+    <!-- Firebase + Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import {
+            getFirestore,
+            collection,
+            addDoc,
+            query,
+            where,
+            orderBy,
+            limit,
+            getDocs,
+            deleteDoc,
+            doc
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0fUKA2kpoW9hHEWKcRqxjX-m-ZBFRpVM",
+            authDomain: "immutable-api.firebaseapp.com",
+            projectId: "immutable-api",
+            storageBucket: "immutable-api.firebasestorage.app",
+            messagingSenderId: "839008159453",
+            appId: "1:839008159453:web:f57d46599dadd29dafbd34",
+            measurementId: "G-EH5P3LS1B6"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- UI Refs ---
+        const btnParseRaw = document.getElementById('btnParseRaw');
+        const deleteCurrentBtn = document.getElementById('deleteCurrentBtn');
+        const loader = document.getElementById('loader');
+        const bar = document.getElementById('bar');
+        const ptext = document.getElementById('ptext');
+        const resultsCard = document.getElementById('results');
+        const verdictEl = document.getElementById('verdict');
+        const ipEl = document.getElementById('ip');
+        const canvasEl = document.getElementById('canvas');
+        const webglEl = document.getElementById('webgl');
+        const audioEl = document.getElementById('audio');
+        const combinedEl = document.getElementById('combined');
+        const historyBox = document.getElementById('history');
+        const fullHistoryBox = document.getElementById('fullHistory'); // NEW
+        const rawInputEl = document.getElementById('rawInput');
+        const webglVendorEl = document.getElementById('webglVendor');
+        const webglRendererEl = document.getElementById('webglRenderer');
+        const webglVersionEl = document.getElementById('webglVersion');
+
+        let lastSavedDocId = null; // To track saved doc
+
+        // --- Helpers ---
+        function setProgress(p, text) {
+            bar.style.width = p + '%';
+            ptext.textContent = text || '';
+        }
+
+        async function sha256(str) {
+            const enc = new TextEncoder();
+            const data = enc.encode(str);
+            const buf = await crypto.subtle.digest('SHA-256', data);
+            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function getIP() {
+            try {
+                const res = await fetch("https://api.ipify.org?format=json");
+                const { ip } = await res.json();
+                return ip || "Unknown";
+            } catch {
+                return "Unknown";
+            }
+        }
+
+        function parseRawInput(text) {
+            const lookup = (label) => {
+                const regex = new RegExp(label + "\\s*([\\s\\S]*?)(?=\\n[A-Z]|$)", "i");
+                const match = text.match(regex);
+                return match ? match[1].trim() : "";
+            };
+            return {
+                canvas: lookup("Canvas hash"),
+                webgl: lookup("WebGL hash"),
+                webglVendor: lookup("WebGL unmasked vendor"),
+                webglRenderer: lookup("WebGL unmasked renderer"),
+                webglVersion: lookup("WebGL version"),
+                audio: lookup("AudioContext hash"),
+            };
+        }
+
+        async function processInput(rawText) {
+            loader.style.display = 'block';
+            setProgress(10, 'Fetching IP…');
+            const ip = await getIP();
+            const parsed = parseRawInput(rawText);
+            const combined = await sha256([ip, parsed.canvas, parsed.webgl, parsed.audio].join('|'));
+
+            // Populate UI
+            ipEl.textContent = ip;
+            canvasEl.textContent = parsed.canvas;
+            webglEl.textContent = parsed.webgl;
+            audioEl.textContent = parsed.audio;
+            combinedEl.textContent = combined;
+
+            webglVendorEl.textContent = parsed.webglVendor;
+            webglRendererEl.textContent = parsed.webglRenderer;
+            webglVersionEl.textContent = parsed.webglVersion;
+
+            resultsCard.style.display = 'block';
+            setProgress(100, 'Done');
+
+            return { ip, ...parsed, combined };
+        }
+
+        async function saveToFirestore(payload) {
+            const docRef = await addDoc(collection(db, "FingerprintLogs"), {
+                ...payload,
+                userAgent: navigator.userAgent,
+                timestamp: new Date()
+            });
+            return docRef.id;
+        }
+
+        deleteCurrentBtn.addEventListener('click', async () => {
+            if (!lastSavedDocId) {
+                alert("No saved entry to delete.");
+                return;
+            }
+            if (!confirm("Are you sure you want to delete this entry?")) return;
+            try {
+                await deleteDoc(doc(db, "FingerprintLogs", lastSavedDocId));
+                alert("Current entry deleted!");
+                resultsCard.style.display = 'none';
+                lastSavedDocId = null;
+                await loadFullHistory(); // Refresh full history after delete
+            } catch (err) {
+                console.error("Failed to delete:", err);
+                alert("Failed to delete current entry.");
+            }
+        });
+
+        async function findMatches({ ip, canvas, webgl, audio }) {
+            const col = collection(db, "FingerprintLogs");
+            const [ipSnap, canSnap, webSnap, audSnap] = await Promise.all([
+                getDocs(query(col, where('ip', '==', ip), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('canvas', '==', canvas), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('webgl', '==', webgl), orderBy('timestamp', 'desc'), limit(25))),
+                getDocs(query(col, where('audio', '==', audio), orderBy('timestamp', 'desc'), limit(25))),
+            ]);
+
+            const toList = (snap, label) => snap.docs.map(d => ({
+                id: d.id,
+                label,
+                ...d.data(),
+                when: d.data().timestamp?.toDate ? d.data().timestamp.toDate() : new Date(d.data().timestamp)
+            }));
+
+            return {
+                ipMatches: toList(ipSnap, 'IP'),
+                canvasMatches: toList(canSnap, 'Canvas'),
+                webglMatches: toList(webSnap, 'WebGL'),
+                audioMatches: toList(audSnap, 'Audio')
+            };
+        }
+
+        function renderHistoryLists(matches) {
+            historyBox.innerHTML = '';
+            const total = matches.ipMatches.length +
+                matches.canvasMatches.length +
+                matches.webglMatches.length +
+                matches.audioMatches.length;
+
+            // Add summary at the top
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'card';
+            summaryCard.innerHTML = `<strong>${total} match${total !== 1 ? 'es' : ''} found</strong>`;
+            historyBox.appendChild(summaryCard);
+
+            if (!total) {
+                return;
+            }
+
+            const addGroup = (title, arr) => {
+                if (!arr.length) return;
+                arr.forEach(e => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.id = `entry-${e.id}`;
+                    card.style.marginTop = '10px';
+                    card.innerHTML = `
+                <div style="font-weight:bold; margin-bottom:6px;">${title} Match</div>
+                <div>🕒 ${e.when.toLocaleString()}</div>
+                <div><strong>IP:</strong> ${e.ip || 'Unknown'}</div>
+                <div><strong>Canvas:</strong> ${e.canvas || 'N/A'}</div>
+                <div><strong>WebGL:</strong> ${e.webgl || 'N/A'}</div>
+                <div><strong>Audio:</strong> ${e.audio || 'N/A'}</div>
+                <div><strong>Combined:</strong> ${e.combined || 'N/A'}</div>
+                <button class="btn mt" style="width:auto; padding:6px 12px; margin-top:8px;"
+                    onclick="deleteEntry('${e.id}')">
+                    🗑 Delete
+                </button>
+            `;
+                    historyBox.appendChild(card);
+                });
+            };
+
+            addGroup('Canvas', matches.canvasMatches);
+            addGroup('WebGL', matches.webglMatches);
+            addGroup('Audio', matches.audioMatches);
+            addGroup('IP', matches.ipMatches);
+        }
+
+
+        function decideVerdict(matches) {
+            const strong = matches.canvasMatches.length || matches.webglMatches.length || matches.audioMatches.length;
+            const mild = !strong && matches.ipMatches.length;
+            verdictEl.style.display = 'block';
+            verdictEl.className = 'alert ' + (strong ? 'alert-strong' : mild ? 'alert-warn' : 'alert-ok');
+            verdictEl.textContent = strong
+                ? '🚨 Strong warning: Canvas and/or WebGL and/or Audio fingerprint matches were found in history.'
+                : mild
+                    ? '⚠️ Mild warning: Only the IP address matches previous records.'
+                    : '✅ No matches in history.';
+        }
+
+        // --- Full History ---
+        async function loadFullHistory() {
+            const col = collection(db, "FingerprintLogs");
+            const snap = await getDocs(query(col, orderBy('timestamp', 'desc'), limit(50)));
+            fullHistoryBox.innerHTML = '';
+
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'card';
+            summaryCard.innerHTML = `<strong>Showing latest ${snap.size} of 50 entries</strong>`;
+            fullHistoryBox.appendChild(summaryCard);
+
+            if (snap.empty) {
+                fullHistoryBox.innerHTML += '<div class="card">No history yet.</div>';
+                return;
+            }
+
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                const when = data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.id = `full-${docSnap.id}`;
+                card.style.marginTop = '10px';
+                card.innerHTML = `
+            <div style="font-weight:bold; margin-bottom:6px;">History Entry</div>
+            <div>🕒 ${when.toLocaleString()}</div>
+            <div><strong>IP:</strong> ${data.ip || 'Unknown'}</div>
+            <div><strong>Canvas:</strong> ${data.canvas || 'N/A'}</div>
+            <div><strong>WebGL:</strong> ${data.webgl || 'N/A'}</div>
+            <div><strong>Audio:</strong> ${data.audio || 'N/A'}</div>
+            <div><strong>Combined:</strong> ${data.combined || 'N/A'}</div>
+            <button class="btn mt" style="width:auto; padding:6px 12px; margin-top:8px;"
+                onclick="deleteEntry('${docSnap.id}', true)">
+                🗑 Delete
+            </button>
+        `;
+                fullHistoryBox.appendChild(card);
+            });
+        }
+
+        // --- Delete Entry (used by both sections) ---
+        window.deleteEntry = async function (docId, isFull = false) {
+            if (!confirm("Are you sure you want to delete this entry?")) return;
+            try {
+                await deleteDoc(doc(db, "FingerprintLogs", docId));
+                document.getElementById(isFull ? `full-${docId}` : `entry-${docId}`)?.remove();
+            } catch (err) {
+                console.error("Failed to delete:", err);
+                alert("Failed to delete entry.");
+            }
+        };
+
+        // --- Main Flow ---
+        btnParseRaw.addEventListener('click', async () => {
+            verdictEl.style.display = 'none';
+            setProgress(0, '');
+            try {
+                const payload = await processInput(rawInputEl.value);
+                setProgress(70, 'Comparing with history…');
+                const matches = await findMatches(payload);
+                decideVerdict(matches);
+                renderHistoryLists(matches);
+                setProgress(90, 'Saving to Firestore…');
+                lastSavedDocId = await saveToFirestore(payload);
+                setProgress(100, 'Saved & Ready');
+                await loadFullHistory(); // Refresh after save
+            } catch (err) {
+                console.error(err);
+                verdictEl.style.display = 'block';
+                verdictEl.className = 'alert alert-strong';
+                verdictEl.textContent = '❌ Failed to process input.';
+            } finally {
+                setTimeout(() => {
+                    bar.style.width = '0%';
+                    ptext.textContent = '';
+                    loader.style.display = 'none';
+                }, 600);
+            }
+        });
+
+        // Load full history on page load
+        loadFullHistory();
+    </script>
+
+
+
+</body>
+
+</html>

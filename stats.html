@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Stats Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f1320;
+      --card: #151a2b;
+      --muted: #aab3c5;
+      --text: #e8ecf3;
+      --accent: #7aa2ff;
+      --good: #2fbf71;
+      --bad: #ff5c5c;
+      --chip: #1b2240;
+      --border: #27314f;
+      --shadow: 0 4px 12px rgba(0, 0, 0, .25);
+      --radius: 12px;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    h1,
+    h3,
+    p {
+      color: var(--text);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 16px;
+      font-family: Arial, sans-serif;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .tab-btn:hover {
+      background: #1a2244;
+      /* hover tone from checker */
+    }
+
+    .tab-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: bold;
+      box-shadow: 0 0 0 2px rgba(122, 162, 255, 0.3) inset;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .overview {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .overview-card {
+      flex: 1;
+      min-width: 150px;
+      background: var(--card);
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    .chart-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    canvas {
+      max-height: 300px;
+    }
+
+    .scheme-list {
+      margin-top: 20px;
+    }
+
+    .scheme-item {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border: 1px solid var(--border);
+    }
+
+    .scheme-item:hover {
+      background: #1a2244;
+    }
+
+    .scheme-item strong {
+      display: block;
+      color: var(--accent);
+    }
+
+    .accounts {
+      display: none;
+      margin-top: 5px;
+      font-size: 0.9em;
+      color: var(--muted);
+    }
+  </style>
+
+
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+</head>
+
+<body>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button id="tabImmutable" class="tab-btn active">Immutable Stats Overview</button>
+    <button id="tabGems" class="tab-btn">Gems Stats Overview</button>
+
+    <a href="index.html"><button id="tabBack" class="tab-btn"> &#x1F860; Go back to cheker</button></a>
+
+  </div>
+
+  <!-- Immutable Tab -->
+  <div id="immutableTab" class="tab-content active">
+    <div class="overview">
+      <div class="overview-card">
+        <h3>Total Entries</h3>
+        <p id="totalImmutable">0</p>
+      </div>
+      <div class="overview-card">
+        <h3>Unique IPs</h3>
+        <p id="uniqueIPs">0</p>
+      </div>
+      <div class="overview-card">
+        <h3>Unique Devices</h3>
+        <p id="uniqueDevices">0</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="chart-card"><canvas id="tierDistribution"></canvas></div>
+      <div class="chart-card"><canvas id="questsPerTier"></canvas></div>
+      <div class="chart-card"><canvas id="hourlyActivity"></canvas></div>
+      <div class="chart-card"><canvas id="ipStats"></canvas></div>
+      <div class="chart-card"><canvas id="deviceType"></canvas></div>
+      <div class="chart-card"><canvas id="browserStats"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Gems Tab -->
+  <div id="gemsTab" class="tab-content">
+    <div class="overview">
+      <div class="overview-card">
+        <h3>Total Wallets</h3>
+        <p id="totalWallets">0</p>
+      </div>
+      <div class="overview-card">
+        <h3>Total Gems</h3>
+        <p id="totalGemsText">0</p>
+      </div>
+      <div class="overview-card">
+        <h3>Total Daily Claims</h3>
+        <p id="totalClaimsText">0</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="chart-card"><canvas id="totalGems"></canvas></div>
+      <div class="chart-card"><canvas id="dailyClaims"></canvas></div>
+      <div class="chart-card"><canvas id="schemeDistribution"></canvas></div>
+      <div class="chart-card"><canvas id="gemsHourly"></canvas></div>
+      <div class="chart-card"><canvas id="topWallets"></canvas></div>
+    </div>
+
+    <!-- Gems Scheme Accounts -->
+    <h3>Gems Scheme Accounts</h3>
+    <div id="schemeAccounts" class="scheme-list"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0fUKA2kpoW9hHEWKcRqxjX-m-ZBFRpVM",
+      authDomain: "immutable-api.firebaseapp.com",
+      projectId: "immutable-api",
+      storageBucket: "immutable-api.firebasestorage.app",
+      messagingSenderId: "839008159453",
+      appId: "1:839008159453:web:f57d46599dadd29dafbd34",
+      measurementId: "G-EH5P3LS1B6"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Tabs toggle
+    const tabImmutable = document.getElementById("tabImmutable");
+    const tabGems = document.getElementById("tabGems");
+    const immutableTab = document.getElementById("immutableTab");
+    const gemsTab = document.getElementById("gemsTab");
+
+    tabImmutable.addEventListener("click", () => {
+      tabImmutable.classList.add("active"); tabGems.classList.remove("active");
+      immutableTab.classList.add("active"); gemsTab.classList.remove("active");
+    });
+    tabGems.addEventListener("click", () => {
+      tabGems.classList.add("active"); tabImmutable.classList.remove("active");
+      gemsTab.classList.add("active"); immutableTab.classList.remove("active");
+    });
+
+    // Chart helper
+    function makeChart(ctx, type, labels, data, label) {
+      return new Chart(ctx, {
+        type,
+        data: {
+          labels,
+          datasets: [{
+            label, data, borderWidth: 1,
+            backgroundColor: ["#4a90e2", "#50e3c2", "#f5a623", "#9013fe", "#d0021b",
+              "#7ed321", "#b8e986", "#f8e71c", "#417505", "#bd10e0"]
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+      });
+    }
+
+    // Immutable Loader (no scheme grouping)
+    async function loadImmutable() {
+      const snap = await getDocs(collection(db, "StatsHistory"));
+      document.getElementById("totalImmutable").textContent = snap.size;
+
+      let tierCount = {}, deviceCount = {}, browserCount = {}, ipCount = {}, hourly = {}, questsPerTier = {};
+      let ipSet = new Set(), deviceSet = new Set();
+
+      snap.forEach(doc => {
+        const d = doc.data();
+        const tier = d.stats?.userStats?.bucketName || "Unknown";
+        tierCount[tier] = (tierCount[tier] || 0) + 1;
+        const dev = d.deviceType || "Unknown"; deviceCount[dev] = (deviceCount[dev] || 0) + 1; deviceSet.add(dev);
+
+        function parseBrowser(userAgent) {
+          if (!userAgent) return "Unknown";
+          if (userAgent.includes("Edg/")) return "Edge";
+          if (userAgent.includes("Chrome/") && !userAgent.includes("Edg/")) return "Chrome";
+          if (userAgent.includes("Safari/") && !userAgent.includes("Chrome/")) return "Safari";
+          if (userAgent.includes("Firefox/")) return "Firefox";
+          if (userAgent.includes("OPR/")) return "Opera";
+          return "Other";
+        }
+        const browser = parseBrowser(d.userAgent);
+        browserCount[browser] = (browserCount[browser] || 0) + 1;
+
+        const ip = d.ip || "Unknown"; ipCount[ip] = (ipCount[ip] || 0) + 1; ipSet.add(ip);
+        const hour = new Date(d.timestamp.seconds * 1000).getHours(); hourly[hour] = (hourly[hour] || 0) + 1;
+
+        const quests = d.stats?.userStats?.targetQuestsCompleted?.length || 0;
+        questsPerTier[tier] = (questsPerTier[tier] || 0) + quests;
+      });
+
+      document.getElementById("uniqueIPs").textContent = ipSet.size;
+      document.getElementById("uniqueDevices").textContent = deviceSet.size;
+
+      makeChart(document.getElementById("tierDistribution"), "pie", Object.keys(tierCount), Object.values(tierCount), "Tier Distribution");
+      makeChart(document.getElementById("deviceType"), "doughnut", Object.keys(deviceCount), Object.values(deviceCount), "Devices");
+      makeChart(document.getElementById("browserStats"), "bar", Object.keys(browserCount), Object.values(browserCount), "Browsers");
+      makeChart(document.getElementById("ipStats"), "bar", Object.keys(ipCount).slice(0, 5), Object.values(ipCount).slice(0, 5), "Top IPs");
+      makeChart(document.getElementById("hourlyActivity"), "line", Object.keys(hourly), Object.values(hourly), "Hourly Checks");
+      makeChart(document.getElementById("questsPerTier"), "bar", Object.keys(questsPerTier), Object.values(questsPerTier), "Quests Completed per Tier");
+    }
+
+    // Gems Loader (with scheme grouping)
+    async function loadGems() {
+      const snap = await getDocs(collection(db, "GemsCheckerHistory"));
+      document.getElementById("totalWallets").textContent = snap.size;
+
+      let totalGems = 0, totalClaims = 0, schemeDist = {}, hourly = {}, walletGems = {}, schemeAccounts = {};
+      snap.forEach(doc => {
+        const d = doc.data();
+        totalGems += d.totalGems || 0; totalClaims += d.dailyClaim || 0;
+        const scheme = d.id?.split(" ")[0] || "Unknown";
+        schemeDist[scheme] = (schemeDist[scheme] || 0) + 1;
+
+        if (!schemeAccounts[scheme]) schemeAccounts[scheme] = [];
+        schemeAccounts[scheme].push(d.id);
+
+        const hour = new Date(d.timestamp.seconds * 1000).getHours(); hourly[hour] = (hourly[hour] || 0) + 1;
+        walletGems[d.address] = d.totalGems || 0;
+      });
+
+      document.getElementById("totalGemsText").textContent = totalGems;
+      document.getElementById("totalClaimsText").textContent = totalClaims;
+
+      makeChart(document.getElementById("totalGems"), "bar", ["Total Gems"], [totalGems], "Total Gems");
+      makeChart(document.getElementById("dailyClaims"), "bar", ["Daily Claims"], [totalClaims], "Total Daily Claims");
+      makeChart(document.getElementById("schemeDistribution"), "pie", Object.keys(schemeDist), Object.values(schemeDist), "ID Schemes");
+      makeChart(document.getElementById("gemsHourly"), "line", Object.keys(hourly), Object.values(hourly), "Hourly Activity");
+
+      const sorted = Object.entries(walletGems).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      makeChart(document.getElementById("topWallets"), "bar", sorted.map(x => x[0].slice(0, 6) + "..." + x[0].slice(-4)), sorted.map(x => x[1]), "Top Wallets");
+
+      // Render scheme accounts list
+      const schemeAccountsBox = document.getElementById("schemeAccounts");
+      schemeAccountsBox.innerHTML = "";
+      Object.entries(schemeAccounts).forEach(([scheme, accounts]) => {
+        const div = document.createElement("div");
+        div.className = "scheme-item";
+        div.innerHTML = `<strong>${scheme}</strong> → ${accounts.length} accounts
+          <div class="accounts">${accounts.join(", ")}</div>`;
+        div.addEventListener("click", () => {
+          const accDiv = div.querySelector(".accounts");
+          accDiv.style.display = accDiv.style.display === "block" ? "none" : "block";
+        });
+        schemeAccountsBox.appendChild(div);
+      });
+    }
+
+    loadImmutable();
+    loadGems();
+  </script>
+</body>
+
+</html>

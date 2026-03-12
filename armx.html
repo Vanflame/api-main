@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Quest Completion Tracker</title>
+  <style>
+    :root {
+      --bg: #0f1320;
+      --card: #151a2b;
+      --muted: #aab3c5;
+      --text: #e8ecf3;
+      --accent: #7aa2ff;
+      --good: #2fbf71;
+      --bad: #ff5c5c;
+      --chip: #1b2240;
+      --border: #27314f;
+      --shadow: 0 4px 12px rgba(0, 0, 0, .25);
+      --radius: 12px;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: linear-gradient(180deg, #131a2b, #0f1320);
+      color: var(--text);
+    }
+
+    /* Navbar */
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      background: #101529;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tab-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .tab-btn:hover {
+      border-color: var(--accent);
+      background: #1a2244;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Wrapper */
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 14px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    input {
+      width: 97%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0b1024;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.9rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--chip);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.9rem;
+      margin-top: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      background: #1a2244;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    #loader {
+      display: flex;
+      justify-content: center;
+      margin: 12px 0;
+    }
+
+    #response {
+      font-weight: 500;
+      font-size: 1rem;
+      margin-top: 12px;
+    }
+
+    #response .green {
+      color: var(--good);
+    }
+
+    #response .red {
+      color: var(--bad);
+    }
+
+    .history-entry {
+      border: 1px solid var(--border);
+      background: #131a36;
+      padding: 8px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }
+
+    .pending-entry {
+      border: 1px solid var(--border);
+      background: #1a1f3d;
+      padding: 8px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }
+
+    .progress-container {
+      width: 100%;
+      background: #0b1024;
+      border-radius: 8px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 16px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    #questProgressText {
+      margin-top: 6px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .btn-group {
+      float: right;
+    }
+
+    .cancel-btn,
+    .send-now-btn {
+      margin-left: 6px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .cancel-btn {
+      background: #f44336;
+      color: white;
+    }
+
+    .send-now-btn {
+      background: #2196f3;
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Navigation -->
+  <div class="nav">
+    <button id="btnQuests" class="tab-btn active">Quest Tracker</button>
+    <button id="btnStats" class="tab-btn">Stats</button>
+    <a href="index.html"><button id="tabBack" class="tab-btn"> 🡠 Go back to checker</button></a>
+  </div>
+
+  <div class="wrap">
+    <!-- Quest Tracker -->
+    <div id="questsSection">
+      <div class="card">
+        <h2>Quest Completion Tracker</h2>
+        <label for="imxInput">IMX Wallet Address</label>
+        <input id="imxInput" type="text" placeholder="0x....">
+
+        <button onclick="enqueueRequest('boss')">Send Kill Boss</button>
+        <button onclick="enqueueRequest('mob')">Send Kill 50 Mobs</button>
+        <button onclick="enqueueRequest('score')">Send 14k Score</button>
+        <button onclick="enqueueRequest('survival')">Send 7min Survive</button>
+
+        <div id="loader" style="display:none;">
+          <div class="progress-container">
+            <div class="progress-bar" id="questProgressBar"></div>
+          </div>
+          <div id="questProgressText"></div>
+        </div>
+
+
+
+        <div id="response"></div>
+        <div id="countdown"></div>
+      </div>
+      <!-- ✅ Pending Queue section -->
+      <div class="card">
+        <h2>⏳ Pending Queue</h2>
+        <div id="pending"></div>
+      </div>
+
+
+
+      <div class="card">
+        <h2>📜 Submission History</h2>
+        <div id="entries"></div>
+      </div>
+
+
+    </div>
+
+    <!-- Stats Section -->
+    <div id="statsSection" style="display:none;">
+      <div class="card" id="overview"></div>
+      <div class="card" id="duplicateIPs"></div>
+      <div class="card" id="topIPs"></div>
+      <div class="card chart-container">
+        <h3>Submissions by Hour</h3>
+        <canvas id="timeChart"></canvas>
+      </div>
+      <div class="card chart-container">
+        <h3>Quest Type Distribution</h3>
+        <canvas id="questTypeChart"></canvas>
+      </div>
+      <div class="card chart-container">
+        <h3>Unique IMX Submissions per Day</h3>
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getFirestore, collection, doc, getDoc, setDoc, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+    // 🔹 Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0fUKA2kpoW9hHEWKcRqxjX-m-ZBFRpVM",
+      authDomain: "immutable-api.firebaseapp.com",
+      projectId: "immutable-api",
+      storageBucket: "immutable-api.firebasestorage.app",
+      messagingSenderId: "839008159453",
+      appId: "1:839008159453:web:7b4240a8f934e367afbd34",
+      measurementId: "G-Z6KBBBKCH6"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 🔹 Globals
+    const response = document.getElementById("response");
+    const loader = document.getElementById("loader");
+    const progressBar = document.getElementById("questProgressBar");
+    const progressText = document.getElementById("questProgressText");
+    const cooldown = 120000; // 2 minutes
+
+
+
+    let queue = [];
+
+    let isProcessing = false;
+    let activeTaskId = null;
+    let paused = (document.visibilityState === 'hidden') || !navigator.onLine;
+
+    function recomputePaused() {
+      paused = (document.visibilityState === 'hidden') || !navigator.onLine;
+    }
+
+    window.addEventListener('online', () => { recomputePaused(); renderPending(); processQueue(); });
+    window.addEventListener('offline', () => { recomputePaused(); renderPending(); });
+    document.addEventListener('visibilitychange', () => { recomputePaused(); renderPending(); processQueue(); });
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function formatRemaining(ms) {
+      if (ms <= 0) return "✅ Ready to send!";
+      const mins = Math.floor(ms / 60000);
+      const secs = Math.floor((ms % 60000) / 1000);
+      return `⏳ Next allowed in ${mins}m ${secs}s`;
+    }
+    async function saveTask(task) {
+      await setDoc(doc(db, "pendingQueue", task.id), task);
+    }
+
+
+    // 🔹 Get IP
+    async function getIP() {
+      try {
+        const res = await fetch("https://api.ipify.org?format=json");
+        const data = await res.json();
+        return data.ip;
+      } catch {
+        return "Unknown";
+      }
+    }
+
+
+
+    // ✅ Enqueue request with duplicate + pending check
+    window.enqueueRequest = async function (type) {
+      const imx = document.getElementById("imxInput").value.trim();
+      if (!imx.startsWith("0x") || imx.length !== 42) {
+        response.innerHTML = `<div class="red">Please enter valid IMX zkevm address</div>`;
+        return;
+      }
+
+      // 🔹 Generate consistent doc ID for this quest
+      const questDocId = btoa(`${type}_${imx}`);
+
+      // 1. Check if already completed (avoid re-sending)
+      const questDocRef = doc(db, "questRequests", questDocId);
+      const questDoc = await getDoc(questDocRef);
+      if (questDoc.exists()) {
+        response.innerHTML = `<div class="red">❌ This quest is already submitted for this wallet.</div>`;
+        return;
+      }
+
+      // 2. Check if already in pending queue (avoid duplicates clogging queue)
+      const pendingSnapshot = await getDocs(collection(db, "pendingQueue"));
+      let alreadyPending = false;
+      pendingSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.type === type && data.imx === imx) {
+          alreadyPending = true;
+        }
+      });
+
+      if (alreadyPending) {
+        response.innerHTML = `<div class="red">⚠️ This quest is already pending for this wallet.</div>`;
+        return;
+      }
+
+      // 3. Otherwise enqueue
+      const taskId = `${type}_${imx}_${Date.now()}`;
+      const task = {
+        id: taskId,
+        type,
+        imx,
+        enqueuedAt: Date.now(),
+        status: "queued",
+        countdownMsRemaining: cooldown
+      };
+
+      queue.push(task);
+      await setDoc(doc(db, "pendingQueue", taskId), task);
+      renderPending();
+      response.innerHTML = `<div class="green">✅ Request queued! It will run after cooldown.</div>`;
+      processQueue();
+    };
+
+
+    // ✅ Load pending queue from Firestore on page load
+    async function loadQueueFromFirestore() {
+      const snapshot = await getDocs(collection(db, "pendingQueue"));
+      queue = [];
+      snapshot.forEach(docSnap => queue.push(docSnap.data()));
+      queue.sort((a, b) => (a.enqueuedAt || a.timestamp) - (b.enqueuedAt || b.timestamp));
+      renderPending();
+      processQueue();
+    }
+    loadQueueFromFirestore();
+
+
+    // ✅ Process queue automatically (strict FIFO; only first item counts down)
+    setInterval(processQueue, 2000);
+
+    async function processQueue() {
+      recomputePaused();
+      if (paused) return;
+      if (isProcessing || queue.length === 0) return;
+
+      // Ensure FIFO
+      queue.sort((a, b) => (a.enqueuedAt || a.timestamp) - (b.enqueuedAt || b.timestamp));
+
+      const task = queue[0];
+      isProcessing = true;
+      activeTaskId = task.id;
+
+      // Mark active and show countdown
+      if (task.status === "queued" || task.status === "error") {
+        task.status = "countdown";
+        await saveTask(task);
+        renderPending();
+      }
+
+      // Check wallet cooldown and adjust remaining if needed
+      const walletDocRef = doc(db, "questRequests", btoa(`cooldown_${task.imx}`));
+      const walletDoc = await getDoc(walletDocRef);
+      if (walletDoc.exists()) {
+        const lastTime = walletDoc.data().timestamp || 0;
+        const elapsed = Date.now() - lastTime;
+        const needed = cooldown - elapsed;
+        if (needed > 0) {
+          task.countdownMsRemaining = Math.min(task.countdownMsRemaining ?? cooldown, needed);
+        }
+      }
+
+      await runCountdown(task);
+      if (paused) {
+        isProcessing = false;
+        activeTaskId = null;
+        renderPending();
+        return; // don’t continue if site hidden/offline
+      }
+
+      // Send
+      task.status = "sending";
+      await saveTask(task);
+      renderPending();
+
+      const ok = await sendRequest(task.type, task.imx);
+
+      if (ok) {
+        // Remove from Firestore & local queue
+        try { await deleteDoc(doc(db, "pendingQueue", task.id)); } catch (e) { }
+        queue.shift();
+      } else {
+        // If it's a duplicate or unrecoverable, just remove it
+        try { await deleteDoc(doc(db, "pendingQueue", task.id)); } catch (e) { }
+        queue.shift();
+      }
+
+
+      isProcessing = false;
+      activeTaskId = null;
+      renderPending();
+      processQueue(); // try next
+    }
+
+
+
+    // ✅ Render Pending Queue
+    // ✅ Render Pending Queue with live status and countdown on the FIRST item only
+    // ✅ Render Pending Queue with Cancel button
+    function renderPending() {
+      const container = document.getElementById("pending");
+      container.innerHTML = "";
+
+      if (queue.length === 0) {
+        container.innerHTML = `<div class="pending-entry">No pending tasks.</div>`;
+        return;
+      }
+
+      queue.forEach((task, idx) => {
+        const elId = `pending-${task.id}`;
+        const isActive = idx === 0;
+
+        let statusText = "⏳ Waiting in queue";
+        if (isActive) {
+          if (paused) statusText = "⏸ Paused (offline/hidden)";
+          else if (task.status === "sending") statusText = "🚀 Sending...";
+          else if (task.status === "countdown") statusText = formatRemaining(task.countdownMsRemaining ?? cooldown);
+          else if (task.status === "queued") statusText = "⏳ Waiting to start...";
+          else if (task.status === "error") statusText = "❌ Error, will retry when active";
+        } else {
+          if (task.status === "error") statusText = "❌ Error, will retry when active";
+        }
+
+        // 🔹 Added Send Now button next to Cancel
+        container.innerHTML += `
+      <div class="pending-entry">
+        <strong>Type:</strong> ${task.type}<br>
+        <strong>IMX:</strong> ${task.imx}<br>
+        <span id="${elId}">${statusText}</span>
+        <div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end;">
+          <button onclick="cancelTask('${task.id}')" style="width:auto;padding:4px 8px;">❌ Cancel</button>
+          <button onclick="sendNowTask('${task.id}')" style="width:auto;padding:4px 8px;background:#2196f3;color:white;border:none;border-radius:4px;">🚀 Send Now</button>
+        </div>
+      </div>
+    `;
+      });
+    }
+
+    window.sendNowTask = async function (taskId) {
+      const task = queue.find(t => t.id === taskId);
+      if (!task) return;
+
+      try {
+        // Remove from pending queue in Firestore + local
+        await deleteDoc(doc(db, "pendingQueue", task.id));
+        queue = queue.filter(t => t.id !== task.id);
+        renderPending();
+
+        // 🚀 Execute immediately (skip cooldown)
+        await sendRequest(task.type, task.imx);
+
+        response.innerHTML = `<div class="green">🚀 Sent immediately: ${task.type} for ${task.imx}</div>`;
+      } catch (e) {
+        console.error("Send Now failed:", e);
+        response.innerHTML = `<div class="red">❌ Send Now failed</div>`;
+      }
+    }
+
+
+
+
+    // ✅ Cancel and remove a task from queue + Firestore
+    async function cancelTask(taskId) {
+      // Remove locally
+      queue = queue.filter(t => t.id !== taskId);
+
+      // Remove from Firestore
+      try {
+        await deleteDoc(doc(db, "pendingQueue", taskId)); // or "questQueue" if you switched
+      } catch (e) {
+        console.warn("Cancel failed on Firestore (might not exist):", e);
+      }
+
+      renderPending();
+    }
+
+    // 🔹 Make sure it's global (needed for inline onclick)
+    window.cancelTask = cancelTask;
+
+
+
+
+
+
+
+    /// ✅ Pause-aware countdown that only runs for the first task
+    async function runCountdown(task) {
+      let remaining = typeof task.countdownMsRemaining === "number" ? task.countdownMsRemaining : cooldown;
+      const elId = `pending-${task.id}`;
+
+      while (remaining > 0) {
+        recomputePaused();
+        if (paused) {
+          // persist remaining and wait until unpaused
+          task.countdownMsRemaining = remaining;
+          await saveTask(task);
+          const el = document.getElementById(elId);
+          if (el) el.textContent = "⏸ Paused (open site / go online to resume)";
+          await sleep(500);
+          continue;
+        }
+        await sleep(250);
+        remaining -= 250;
+        task.countdownMsRemaining = remaining;
+        const el = document.getElementById(elId);
+        if (el) el.textContent = formatRemaining(remaining);
+      }
+
+      task.countdownMsRemaining = 0;
+      await saveTask(task);
+      const el = document.getElementById(elId);
+      if (el) el.textContent = "✅ Ready to send!";
+    }
+
+
+
+    // ✅ Actual request logic
+    async function sendRequest(type, imx) {
+      response.innerHTML = "";
+      loader.style.display = 'block';
+      progressBar.style.width = "0%";
+      progressText.textContent = "Starting...";
+
+      const url = `https://backend-15430359625.asia-southeast1.run.app/quest-completion/${type === 'boss' ? 'kill-boss' :
+        type === 'mob' ? 'kill-50-mobs' :
+          type === 'score' ? 'boss-score' :
+            type === 'survival' ? 'survival-time' : ''
+        }/${imx}`;
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+      const questDocId = btoa(`${type}_${imx}`);
+      const questDocRef = doc(db, "questRequests", questDocId);
+      const questDoc = await getDoc(questDocRef);
+      if (questDoc.exists()) {
+        response.innerHTML = `<div class="red">❌ Already submitted this quest for this IMX address.</div>`;
+        loader.style.display = 'none';
+        return false;
+      }
+
+      const ip = await getIP();
+      const headers = {
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "x-api-key": "f89af413-58a1-4cae-8505-d56f49afc0ae",
+        "User-Agent": "ArmourX/++UE5+Release-5.5-CL-40574608 (http-eventloop) Windows/10.0.22631.1.768.64bit"
+      };
+
+      try {
+        progressBar.style.width = "30%";
+        progressText.textContent = "Preparing request...";
+        await new Promise(r => setTimeout(r, 500));
+
+        const res = await fetch(proxyUrl, { method: "POST", headers, body: JSON.stringify({}) });
+
+        progressBar.style.width = "60%";
+        progressText.textContent = "Waiting for response...";
+
+        if (!res.ok) {
+          const text = await res.text();
+          response.innerHTML = `<div class="red">Error ${res.status}: ${text || res.statusText}</div>`;
+          loader.style.display = 'none';
+          return;
+        }
+
+        const result = await res.text();
+
+        progressBar.style.width = "100%";
+        progressText.textContent = "Saving results...";
+
+        await setDoc(questDocRef, { url, timestamp: Date.now(), type, imx, ip, response: result });
+        await setDoc(doc(db, "questRequests", btoa(`cooldown_${imx}`)), { timestamp: Date.now() });
+
+        response.innerHTML = `<div class="green">✅ Success: Quest submitted!</div>`;
+        loadHistory();
+        return true;   // ✅ success
+      } catch (err) {
+        response.innerHTML = `<div class="red">Error: ${err.message}</div>`;
+        return false;  // ❌ failure
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+
+    // ✅ History (limit 50) with cleaner + auto-delete bad entries
+    async function loadHistory() {
+      const q = query(collection(db, "questRequests"), orderBy("timestamp", "desc"), limit(50));
+      const snapshot = await getDocs(q);
+      const container = document.getElementById("entries");
+      container.innerHTML = "";
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+
+        // 🔹 If the record is invalid, delete it
+        if (!data.type || !data.imx || !data.timestamp || !data.response) {
+          // try {
+          //   await deleteDoc(docSnap.ref);
+          //   console.warn("🧹 Cleaner removed bad entry:", docSnap.id);
+          // } catch (e) {
+          //   console.error("Cleaner failed to delete bad entry:", e);
+          // }
+          continue; // skip rendering
+        }
+
+        const time = new Date(data.timestamp).toLocaleString();
+        container.innerHTML += `
+      <div class="history-entry">
+        <strong>Type:</strong> ${data.type}<br>
+        <strong>IMX:</strong> ${data.imx}<br>
+        <strong>IP:</strong> ${data.ip || "Unknown"}<br>
+        <strong>URL:</strong> ${data.url || "N/A"}<br>
+        <strong>Time:</strong> ${time}<br>
+        <strong>Response:</strong> ${data.response}
+      </div>
+    `;
+      }
+    }
+
+    loadHistory();
+
+    // ✅ Stats unchanged
+    async function loadStats() {
+      const snapshot = await getDocs(collection(db, "questRequests"));
+      const total = snapshot.size;
+      const imxSet = new Set();
+      const ipMap = {};
+      const timeMap = {};
+      const typeMap = {};
+      const dailyMap = {};
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const ip = data.ip || "Unknown";
+        const imx = data.imx;
+        const time = new Date(data.timestamp);
+
+        imxSet.add(imx);
+
+        if (!ipMap[ip]) ipMap[ip] = new Set();
+        ipMap[ip].add(imx);
+
+        const hour = time.getHours();
+        timeMap[hour] = (timeMap[hour] || 0) + 1;
+        typeMap[data.type] = (typeMap[data.type] || 0) + 1;
+
+        const dateKey = time.toISOString().split("T")[0];
+        dailyMap[dateKey] = (dailyMap[dateKey] || new Set());
+        dailyMap[dateKey].add(imx);
+      });
+
+      document.getElementById("overview").innerHTML = `
+            <h3>Overview</h3>
+            <p><strong>Total submissions:</strong> ${total}</p>
+            <p><strong>Unique IMX addresses:</strong> ${imxSet.size}</p>
+            <p><strong>Unique IP addresses:</strong> ${Object.keys(ipMap).length}</p>
+          `;
+    }
+
+    // Tabs
+    const btnQuests = document.getElementById('btnQuests');
+    const btnStats = document.getElementById('btnStats');
+    const questsSection = document.getElementById('questsSection');
+    const statsSection = document.getElementById('statsSection');
+
+    btnQuests.addEventListener('click', () => {
+      questsSection.style.display = 'block';
+      statsSection.style.display = 'none';
+      btnQuests.classList.add('active');
+      btnStats.classList.remove('active');
+    });
+
+    btnStats.addEventListener('click', () => {
+      questsSection.style.display = 'none';
+      statsSection.style.display = 'block';
+      btnStats.classList.add('active');
+      btnQuests.classList.remove('active');
+      loadStats();
+    });
+
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Immutable API Checker</title>
+  <style>
+    :root {
+      --bg: #0f1320;
+      --card: #151a2b;
+      --muted: #aab3c5;
+      --text: #e8ecf3;
+      --accent: #7aa2ff;
+      --good: #2fbf71;
+      --bad: #ff5c5c;
+      --chip: #1b2240;
+      --border: #27314f;
+      --shadow: 0 4px 12px rgba(0, 0, 0, .25);
+      --radius: 12px;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: linear-gradient(180deg, #131a2b, #0f1320);
+      color: var(--text);
+    }
+
+    /* Slim Navbar */
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      background: #101529;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tab-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .tab-btn:hover {
+      border-color: var(--accent);
+      background: #1a2244;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Content Wrapper */
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 20px 14px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    textarea {
+      width: 97%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0b1024;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.9rem;
+    }
+
+    /* Toolbar design */
+    .toolbar {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .toolbar-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .compact {
+      max-width: 220px;
+    }
+
+    .btn-primary {
+      flex: 1 0 180px;
+    }
+
+    .btn-secondary {
+      margin-left: auto;
+    }
+
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .switch input {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 40px;
+      height: 22px;
+      background: #222a44;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      position: relative;
+      outline: none;
+      transition: background .2s ease;
+    }
+
+    .switch input:checked {
+      background: #2a4cff;
+      border-color: #2a4cff;
+    }
+
+    .switch input::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 3px;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left .2s ease;
+    }
+
+    .switch input:checked::after {
+      left: 21px;
+    }
+
+    .switch-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    select,
+    button {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0b1024;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.9rem;
+    }
+
+    /* Inputs (date/time) */
+    input[type="datetime-local"],
+    input[type="date"],
+    input[type="time"] {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0b1024;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.9rem;
+    }
+
+    input[type="datetime-local"]:focus,
+    input[type="date"]:focus,
+    input[type="time"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(122, 162, 255, 0.15);
+    }
+
+    /* Calendar icon */
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(80%);
+      opacity: 0.8;
+      cursor: pointer;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+      max-height: 160px;
+    }
+
+    button {
+      margin-top: 10px;
+      font-weight: 500;
+      background: var(--chip);
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      background: #1a2244;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .progress-container {
+      width: 100%;
+      background: #0b1024;
+      border-radius: 8px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 16px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    #loader,
+    #gemsLoader {
+      display: flex;
+      justify-content: center;
+      margin: 12px 0;
+    }
+
+    #response,
+    #gemsResponse {
+      font-weight: 500;
+      font-size: 1rem;
+      margin-top: 12px;
+    }
+
+    #response .green,
+    #gemsResponse .green {
+      color: var(--good);
+    }
+
+    #response .red,
+    #gemsResponse .red {
+      color: var(--bad);
+    }
+
+    .history-entry {
+      border: 1px solid var(--border);
+      background: #131a36;
+      padding: 8px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }
+
+    .tier-common {
+      color: #666;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .tier-uncommon {
+      color: green;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .tier-rare {
+      color: blue;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .tier-epic {
+      color: purple;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .tier-legend {
+      color: goldenrod;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+
+    .game-dropdown {
+      margin: 12px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--card);
+    }
+
+    .game-header {
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #1a1f33;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .game-header:hover {
+      background: #232a44;
+    }
+
+    .quest-list {
+      display: none;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .quest-list ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .quest-list li {
+      margin: 4px 0;
+    }
+
+    /* Progress Bar Wrapper */
+    .tier-progress {
+      margin: 20px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .tier-bar-container {
+      width: 100%;
+      height: 18px;
+      background: #2a2f45;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
+      border: 1px solid var(--border);
+    }
+
+    .tier-bar {
+      height: 100%;
+      width: 0%;
+      transition: width 0.6s ease;
+    }
+
+    .tier-common-bar {
+      background: #777;
+    }
+
+    .tier-uncommon-bar {
+      background: #2fbf71;
+    }
+
+    .tier-rare-bar {
+      background: #2d7ff9;
+    }
+
+    .tier-epic-bar {
+      background: #9b59b6;
+    }
+
+    .tier-legendary-bar {
+      background: goldenrod;
+    }
+
+    .tier-info {
+      font-size: 0.9rem;
+      margin-top: 6px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Navigation -->
+  <div class="nav">
+    <button id="btnStats" class="tab-btn active">Immutable Stats Checker</button>
+    <button id="btnGems" class="tab-btn">Gems Checker</button>
+    <a href="fingerprint_test_cleaned.html">
+      <button id="tabFp" class="tab-btn">Web Fingerprints</button>
+    </a>
+    <a href="stats.html">
+      <button id="btnStats" class="tab-btn">&#x1F862; Go to Analytics</button>
+    </a>
+
+  </div>
+
+
+  <div class="wrap">
+    <!-- Stats Checker -->
+    <div id="statsSection">
+      <div class="card">
+        <h2>Immutable Account Checker</h2>
+        <label for="auth">Authorization Token</label>
+        <textarea id="auth" placeholder="Paste your Authorization token..." readonly></textarea>
+        <button id="sendBtn">Check</button>
+
+        <div id="statsLoader" style="display:none;">
+          <div class="progress-container">
+            <div class="progress-bar" id="statsProgressBar"></div>
+          </div>
+          <div id="statsProgressText"></div>
+        </div>
+
+
+
+        <label for="weekFilter">Select Week</label>
+        <select id="weekFilter"></select>
+
+        <div id="controls" class="toolbar">
+          <div class="toolbar-row">
+            <button id="refreshHistoryBtn" class="btn-primary">Refresh History</button>
+            <label class="switch">
+              <input type="checkbox" id="autoRefreshToggle">
+              <span class="switch-label">Auto-refresh</span>
+            </label>
+            <select id="autoRefreshInterval" class="compact">
+              <option value="60000">Every 1 min</option>
+              <option value="300000" selected>Every 5 min</option>
+              <option value="600000">Every 10 min</option>
+              <option value="1800000">Every 30 min</option>
+            </select>
+          </div>
+          <div class="toolbar-row">
+            <label class="switch">
+              <input type="checkbox" id="useCustomRange">
+              <span class="switch-label">Use custom date range</span>
+            </label>
+            <input type="datetime-local" id="customStart" class="compact">
+            <input type="datetime-local" id="customEnd" class="compact">
+            <button id="exportCsvBtn" class="btn-secondary">Export CSV</button>
+          </div>
+        </div>
+
+        <div id="response"></div>
+        <div id="tierProgressBox" class="tier-progress hidden">
+          <div id="tierTitle">NEXT DRAW PROJECTION</div>
+          <div class="tier-bar-container">
+            <div id="tierBar" class="tier-bar"></div>
+          </div>
+          <div id="tierStats" class="tier-info"></div>
+        </div>
+
+        <div id="availableQuests"></div>
+        <div id="alreadyLogged"></div>
+        <div id="history"></div>
+      </div>
+    </div>
+
+    <!-- Gems Checker -->
+    <div id="gemsSection" class="hidden">
+      <div class="card">
+        <h2>Immutable Gems Checker</h2>
+        <label for="gemsAddress">Wallet Address(es)</label>
+        <textarea id="gemsAddress" placeholder="One wallet per line..."></textarea>
+        <button id="gemsBtn">Check Gems</button>
+
+        <label for="idScheme">ID Scheme</label>
+        <select id="idScheme">
+          <option value="2">1</option>
+          <option value="3">2</option>
+          <option value="4">3</option>
+          <option value="5">4</option>
+          <option value="6">5</option>
+          <option value="7">6</option>
+          <option value="8">7</option>
+          <option value="1">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+
+        <div id="gemsLoader" style="display:none;">
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div id="progressText"></div>
+        </div>
+
+        <div id="gemsResponse"></div>
+        <div id="bulkResults"></div>
+      </div>
+
+      <div class="card">
+        <h2>Gems History</h2>
+        <div id="gemsHistory"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Firebase + Logic -->
+  <script type="module">
+    function showToast(message, type = 'info', timeoutMs = 3000) {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const div = document.createElement('div');
+      div.className = `toast toast-${type}`;
+      div.textContent = message;
+      const remove = () => { if (div && div.parentNode) div.parentNode.removeChild(div); };
+      div.addEventListener('click', remove);
+      container.appendChild(div);
+      setTimeout(remove, timeoutMs);
+    }
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      query,
+      orderBy,
+      limit,
+      getDocs,
+      where,
+      deleteDoc,
+      setDoc,       // ✅ add this
+      doc           // ✅ add this
+    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0fUKA2kpoW9hHEWKcRqxjX-m-ZBFRpVM",
+      authDomain: "immutable-api.firebaseapp.com",
+      projectId: "immutable-api",
+      storageBucket: "immutable-api.firebasestorage.app",
+      messagingSenderId: "839008159453",
+      appId: "1:839008159453:web:f57d46599dadd29dafbd34",
+      measurementId: "G-EH5P3LS1B6"
+    };
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+
+    // Week ranges (UTC 0:00 boundaries)
+    let weekRanges = {};
+    let lastHistoryRows = [];
+    let autoRefreshTimer = null;
+
+    function toUtcDate(year, monthIndex, day) {
+      return new Date(Date.UTC(year, monthIndex, day, 0, 0, 0));
+    }
+
+    function formatRangeLabel(start, end) {
+      const opts = { month: 'short', day: 'numeric' };
+      const s = start.toLocaleDateString('en-US', opts);
+      const e = end.toLocaleDateString('en-US', opts);
+      const endYear = end.getUTCFullYear();
+      return `${s} → ${e}, ${endYear}`;
+    }
+
+    function buildWeeks() {
+      // Anchor: Week 20 starts Aug 14, 2025
+      const anchorWeekNumber = 20;
+      const anchorStart = toUtcDate(2025, 7, 14); // Aug is monthIndex 7
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+      const now = new Date();
+      // Build weeks forward until two weeks beyond now
+      weekRanges = {};
+      const weeks = [];
+      let weekIndex = 0;
+      while (true) {
+        const start = new Date(anchorStart.getTime() + weekIndex * oneWeekMs);
+        const end = new Date(start.getTime() + oneWeekMs);
+        const weekNumber = anchorWeekNumber + weekIndex;
+        weeks.push({ weekNumber, start, end });
+        if (end > new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)) break;
+        weekIndex++;
+      }
+      // Populate map and dropdown
+      const sel = document.getElementById('weekFilter');
+      sel.innerHTML = '';
+      weeks.forEach(w => {
+        weekRanges[w.weekNumber] = { start: w.start, end: w.end };
+        const opt = document.createElement('option');
+        opt.value = String(w.weekNumber);
+        opt.textContent = `Week ${w.weekNumber} (${formatRangeLabel(w.start, w.end)})`;
+        sel.appendChild(opt);
+      });
+
+      // Default: previously saved or current week
+      const savedWeek = localStorage.getItem('weekFilter');
+      if (savedWeek && weekRanges[savedWeek]) {
+        sel.value = savedWeek;
+      } else {
+        const current = weeks.find(w => now >= w.start && now < w.end) || weeks[weeks.length - 1];
+        sel.value = String(current.weekNumber);
+      }
+    }
+
+
+    // Tabs
+    const btnStats = document.getElementById('btnStats');
+    const btnGems = document.getElementById('btnGems');
+    const statsSection = document.getElementById('statsSection');
+    const gemsSection = document.getElementById('gemsSection');
+
+    const statsLoader = document.getElementById("statsLoader");
+    const statsProgressBar = document.getElementById("statsProgressBar");
+    const statsProgressText = document.getElementById("statsProgressText");
+
+
+    function activateTab(which) {
+      if (which === 'stats') {
+        statsSection.classList.remove('hidden'); gemsSection.classList.add('hidden');
+        btnStats.classList.add('active'); btnGems.classList.remove('active');
+      } else {
+        gemsSection.classList.remove('hidden'); statsSection.classList.add('hidden');
+        btnGems.classList.add('active'); btnStats.classList.remove('active');
+      }
+    }
+    btnStats.addEventListener('click', () => activateTab('stats'));
+    btnGems.addEventListener('click', () => activateTab('gems'));
+
+    // =====================
+    // Stats Checker JS (UNCHANGED)
+    // =====================
+    async function generateLogId(token, progress, tier) {
+      const raw = `${token}|${progress}|${tier}`;
+      const encoder = new TextEncoder();
+      const data = encoder.encode(raw);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function getUserIP() {
+      try {
+        const res = await fetch("https://api.ipify.org?format=json");
+        const data = await res.json();
+        let ip = data.ip;
+        if (ip.startsWith("175.176")) ip = "192.168.1.1";
+        return ip;
+      } catch {
+        return "Unknown IP";
+      }
+    }
+    function getDeviceType() {
+      const ua = navigator.userAgent;
+      if (/Mobi|Android/i.test(ua)) return "Mobile";
+      if (/iPad|Tablet/i.test(ua)) return "Tablet";
+      return "Desktop";
+    }
+    function getTierClass(tier) {
+      switch (tier.toLowerCase()) {
+        case 'common': return 'tier-common';
+        case 'uncommon': return 'tier-uncommon';
+        case 'rare': return 'tier-rare';
+        case 'epic': return 'tier-epic';
+        case 'legendary': return 'tier-legend';
+        default: return '';
+      }
+    }
+
+    async function renderHistory() {
+      const historyBox = document.getElementById('history');
+      historyBox.innerHTML = "";
+      lastHistoryRows = [];
+
+      const useCustom = document.getElementById('useCustomRange')?.checked;
+      let start, end;
+      if (useCustom) {
+        const s = document.getElementById('customStart').value;
+        const e = document.getElementById('customEnd').value;
+        start = s ? new Date(s) : new Date(0);
+        end = e ? new Date(e) : new Date();
+      } else {
+        const selectedWeek = document.getElementById("weekFilter")?.value || "21";
+        ({ start, end } = weekRanges[selectedWeek] || {});
+      }
+
+      const q = query(
+        collection(db, "StatsHistoryPrivate"),
+        where("timestamp", ">=", start),
+        where("timestamp", "<", end),
+        orderBy("timestamp", "desc"),
+        limit(500)
+      );
+
+
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(doc => {
+        const entry = doc.data();
+        const time = entry.timestamp?.toDate ? entry.timestamp.toDate().toLocaleString() : new Date(entry.timestamp).toLocaleString();
+        const stats = entry.stats.userStats || {};
+        const rules = entry.stats.eligibility?.rules || {};
+        const tier = stats.bucketName || 'N/A';
+        const tierClass = getTierClass(tier);
+        const quests = stats.targetQuestsCompleted || [];
+        const questList = quests.length ? `<ul>${quests.map(q => `<li>${q}</li>`).join('')}</ul>` : '<em>No quests completed</em>';
+        const div = document.createElement("div");
+        div.className = "history-entry";
+        const hasWarning = !rules.is_kyc_exempt || !rules.is_not_sybil || !rules.is_not_sanctioned;
+
+        // store row for export
+        lastHistoryRows.push({
+          time,
+          ip: entry.ip || '',
+          deviceType: entry.deviceType || '',
+          tier,
+          progressPercentage: entry.progressPercentage ?? stats.progressPercentage ?? 0,
+          weeklyPoints: entry.weeklyPoints ?? stats.totalWeeklyPoints ?? 0,
+          totalCompleted: stats.totalInGameQuestsCompleted || 0,
+          quests: (quests || []).join('; ')
+        });
+
+        div.innerHTML = `
+  <div style="margin-bottom:6px; font-size:0.85rem; color:var(--muted);">
+    🕒 ${time} — 🌐 ${entry.ip} — 📱 ${entry.deviceType || 'Unknown'}
+  </div>
+
+  <div style="margin-bottom:8px;">
+    <strong>🎯 Tier:</strong> <span class="${tierClass}">${tier}</span>
+  </div>
+
+  <div style="text-align:center; margin:6px 0;">
+    <div style="font-size:1.1rem; font-weight:700; margin-bottom:4px;">
+      <span class="${tierClass}">
+        ${entry.progressPercentage ?? stats.progressPercentage ?? 0}%
+      </span>
+    </div>
+
+    <div class="tier-bar-container" style="height:14px; margin-bottom:4px;">
+      <div class="tier-bar ${tierClass}-bar"
+           style="width:${entry.progressPercentage ?? stats.progressPercentage ?? 0}%; transition:width 0.6s ease;"></div>
+    </div>
+
+    <div style="font-size:0.85rem; color:var(--muted);">
+      ⭐ ${entry.weeklyPoints ?? stats.totalWeeklyPoints ?? 0} Weekly Points
+    </div>
+  </div>
+
+  <div style="margin-top:6px; font-size:0.9rem;">
+    <strong>✅ Completed:</strong> ${stats.totalInGameQuestsCompleted || 0}<br>
+    <strong>🧩 Quests:</strong> ${questList}
+  </div>
+
+  <div style="margin-top:6px; font-size:0.85rem; color:var(--muted);">
+    🔐 KYC: ${rules.is_kyc_exempt ? '✅' : '❌'} | 
+    🧠 Sybil: ${rules.is_not_sybil ? '✅' : '❌'} | 
+    🚫 Sanctioned: ${rules.is_not_sanctioned ? '✅' : '❌'}<br>
+    🎮 Played: ${rules.have_played_any_in_game_quest ? '✅' : '❌'} | 
+    🔗 Social: ${rules.have_linked_any_social_media ? '✅' : '❌'} | 
+    📞 Phone: ${rules.have_verified_phone ? '✅' : '❌'}
+  </div>
+
+  ${hasWarning ? `
+    <div style="margin-top:8px; padding:6px 10px; border-radius:6px; 
+                background:rgba(255,0,0,0.1); color:#ff4d4d; font-size:0.85rem; font-weight:600;">
+      ⚠️ Warning: One or more risk checks failed (KYC / Sybil / Sanctioned)
+    </div>
+  ` : ''}
+`;
+
+
+
+
+        historyBox.appendChild(div);
+      });
+    }
+
+
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      const token = document.getElementById('auth').value.trim();
+      const responseBox = document.getElementById('response');
+      const alreadyLog = document.getElementById('alreadyLogged');
+      responseBox.innerHTML = "";
+      alreadyLog.innerHTML = "";
+      document.getElementById("statsLoader").style.display = "block";
+      document.getElementById("statsProgressBar").style.width = "0%";
+      document.getElementById("statsProgressText").textContent = "Checking stats...";
+
+
+
+
+
+      if (!token) { responseBox.innerHTML = '<div class="red">Please enter a valid token.</div>'; statsLoader.style.display = 'none'; showToast('Please enter a valid token', 'error'); return; }
+      try {
+        const ip = await getUserIP();
+        const userAgent = navigator.userAgent;
+        const deviceType = getDeviceType();
+        await sleep(1000); // ⏳ show 0% for a moment
+
+        const headers = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json, text/plain, */*', 'Access-Control-Allow-Origin': '*', 'Origin': 'https://play.immutable.com', 'Referer': 'https://play.immutable.com/', 'User-Agent': userAgent };
+        const [statsRes, eligibilityRes] = await Promise.all([
+          fetch('https://api.immutable.com/v3/rewards/sweepstakes/user-stats/predicted', { method: 'GET', headers }),
+          fetch('https://api.immutable.com/v1/rewards/redemption/eligibility', { method: 'GET', headers })
+
+        ]);
+        statsProgressBar.style.width = "50%";
+        statsProgressText.textContent = "Fetched stats...";
+        await sleep(1000); // ⏳ show 50% for a moment
+
+        if (!statsRes.ok || !eligibilityRes.ok) { responseBox.innerHTML = '<div class="red">Invalid or Expired Authentication token</div>'; statsLoader.style.display = 'none'; showToast('Invalid or expired authentication token', 'error'); return; }
+        const statsData = await statsRes.json(); const eligibilityData = await eligibilityRes.json();
+        // const combined = { userStats: statsData.userStats || {}, eligibility: eligibilityData || {} };
+        // const progress = combined.userStats?.progressPercentage || 0;
+        // const tier = combined.userStats?.bucketName || 'N/A';
+
+        // ✅ Collect completed quest names
+        let completedQuests = [];
+        let totalCompleted = 0;
+
+        // get selected week
+        const selectedWeek = document.getElementById("weekFilter").value;
+        const { start, end } = weekRanges[selectedWeek];
+
+        if (statsData.games && Array.isArray(statsData.games)) {
+          statsData.games.forEach(game => {
+            if (game.quests && Array.isArray(game.quests)) {
+              game.quests.forEach(q => {
+                if (q.lastCompletedAt) {
+                  const completedAt = new Date(q.lastCompletedAt);
+                  if (completedAt >= start && completedAt < end) {
+                    completedQuests.push(q.name);
+                    totalCompleted++;
+                  }
+                } else if (q.timesCompleted && q.timesCompleted > 0) {
+                  completedQuests.push(q.name);
+                  totalCompleted++;
+                }
+
+
+              });
+            }
+          });
+          renderAvailableQuests(statsData);
+        }
+
+        function renderAvailableQuests(statsData) {
+          const availableBox = document.getElementById("availableQuests");
+          if (!availableBox) return;
+
+          // Preserve previous selection (if any)
+          const prevMode = document.getElementById("sortFilter")?.value || "default";
+
+          availableBox.innerHTML = `
+    <h3>🧩 Available Quests Account Quest</h3>
+    <button id="expandAll">Expand All</button>
+    <button id="collapseAll">Collapse All</button>
+
+    <label for="sortFilter">Sort by:</label>
+    <select id="sortFilter">
+      <option value="default">Default</option>
+      <option value="soonest">Ending Soonest</option>
+      <option value="points">Highest Points</option>
+      <option value="daily">Daily Quests</option>
+      <option value="weekly">Weekly Quests</option>
+    </select>
+  `;
+
+          // restore selection
+          document.getElementById("sortFilter").value = prevMode;
+
+          // re-attach listeners every render
+          document.getElementById("expandAll").addEventListener("click", () => {
+            document.querySelectorAll(".quest-list").forEach(list => list.style.display = "block");
+          });
+          document.getElementById("collapseAll").addEventListener("click", () => {
+            document.querySelectorAll(".quest-list").forEach(list => list.style.display = "none");
+          });
+          document.getElementById("sortFilter").addEventListener("change", () => {
+            renderAvailableQuests(statsData);
+          });
+
+          // loop games
+          if (statsData.games && Array.isArray(statsData.games)) {
+            statsData.games.forEach(game => {
+              if (game.quests && Array.isArray(game.quests)) {
+                let availableQuests = game.quests; // show all for now
+
+
+                // ✅ Apply sorting/filter
+                const mode = document.getElementById("sortFilter").value;
+                if (mode === "soonest") {
+                  availableQuests.sort((a, b) => new Date(a.endDate || Infinity) - new Date(b.endDate || Infinity));
+                } else if (mode === "points") {
+                  availableQuests.sort((a, b) => (b.weeklyPoints || 0) - (a.weeklyPoints || 0));
+                } else if (mode === "daily") {
+                  availableQuests = availableQuests.filter(q => q.refreshPeriodHours === 24);
+                } else if (mode === "weekly") {
+                  availableQuests = availableQuests.filter(q => q.refreshPeriodHours === 168);
+                }
+
+                if (availableQuests.length > 0) {
+                  // build dropdown like you already had
+                  const container = document.createElement("div");
+                  container.className = "game-dropdown";
+
+                  const header = document.createElement("div");
+                  header.className = "game-header";
+                  const now = new Date();
+                  let endedCount = 0;
+                  let activeCount = 0;
+
+                  game.quests.forEach(q => {
+                    if (q.endDate && new Date(q.endDate) < now) {
+                      endedCount++;
+                    } else {
+                      activeCount++;
+                    }
+                  });
+
+                  const allEnded = activeCount === 0;
+                  header.innerHTML = `
+            <span>
+              <img src="${game.icon}" alt="" style="width:20px;height:20px;vertical-align:middle;margin-right:6px;">
+              ${game.name} 
+              ${allEnded
+                      ? `<span style="color:var(--bad);font-weight:bold;">[ENDED]</span>`
+                      : `<span style="color:var(--muted);">(${activeCount} active / ${endedCount} ended)</span>`}
+            </span>
+            <span>▼</span>
+          `;
+
+                  const list = document.createElement("div");
+                  list.className = "quest-list";
+                  list.innerHTML = `<ul>${availableQuests.map(q => {
+                    let status = "";
+
+                    if (q.endDate) {
+                      const endUTC = new Date(q.endDate);
+                      const options = { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
+                      const endPH = endUTC.toLocaleString("en-PH", options);
+                      if (endUTC < new Date()) {
+                        status += ` <span style="color:var(--bad);">(Ended ${endPH})</span>`;
+                      } else {
+                        status += ` <span style="color:var(--muted);">(Ends ${endPH})</span>`;
+                      }
+                    }
+
+                    if (q.refreshPeriodHours) {
+                      const next = new Date(q.nextAvailableAt);
+                      const diff = next - Date.now();
+                      if (diff > 0) {
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        status += ` <span style="color:var(--accent);">(Resets in ${hours}h ${mins}m)</span>`;
+                      }
+                    }
+
+                    if (q.endDate) {
+                      const diffHours = (new Date(q.endDate) - new Date()) / (1000 * 60 * 60);
+                      if (diffHours > 0 && diffHours < 24) {
+                        status += ` <span style="color:orange;font-weight:bold;">⚠️ Ends soon!</span>`;
+                      }
+                    }
+
+                    return `
+  <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
+    <span>${q.name}${status}</span>
+    <span style="
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background:var(--chip);
+      border:1px solid var(--border);
+      border-radius:8px;
+      padding:2px 8px;
+      font-size:0.85rem;
+      color:var(--accent);
+      font-weight:600;
+      box-shadow:inset 0 0 4px rgba(0,0,0,0.3);
+    ">
+      ${q.weeklyPoints ?? q.points ?? 0}
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gold" viewBox="0 0 24 24">
+        <path d="M17 3H7v4H3v3c0 3.07 1.63 5.64 4 7v3H8v3h8v-3h1v-3c2.37-1.36 4-3.93 4-7V7h-4V3zm-1 9H8V7h8v5z"/>
+      </svg>
+    </span>
+  </li>
+`;
+
+
+                  }).join("")}</ul>`;
+
+                  header.addEventListener("click", () => {
+                    list.style.display = list.style.display === "block" ? "none" : "block";
+                  });
+
+                  container.appendChild(header);
+                  container.appendChild(list);
+                  availableBox.appendChild(container);
+                }
+              }
+            });
+          }
+        }
+
+
+
+        // Attach filter listener ONCE
+        document.addEventListener("change", (e) => {
+          if (e.target && e.target.id === "sortFilter") {
+            renderAvailableQuests(statsData);
+          }
+        });
+
+
+
+
+
+
+
+        // ✅ Remap predicted response into old structure
+        const combined = {
+          userStats: {
+            progressPercentage: statsData.percentageToNextTier || 0,   // old "progressPercentage"
+            bucketName: statsData.predictedRarity || "N/A",            // old "bucketName"
+            totalInGameQuestsCompleted: totalCompleted,                // old "totalInGameQuestsCompleted"
+            targetQuestsCompleted: completedQuests                     // old "targetQuestsCompleted"
+          },
+          eligibility: eligibilityData || {}
+        };
+
+        const progress = combined.userStats.progressPercentage;
+        const tier = combined.userStats.bucketName;
+        const quests = combined.userStats.targetQuestsCompleted;
+
+        const logId = await generateLogId(token, progress, tier);
+        const q = query(collection(db, "StatsHistoryPrivate"), where("logId", "==", logId), limit(1));
+        const snapshot = await getDocs(q);
+        const alreadyLoggedFlag = !snapshot.empty;
+        const tierClass = getTierClass(tier);
+        // const quests = combined.userStats.targetQuestsCompleted || [];
+        const questList = quests.length ? `<ul>${quests.map(q => `<li>${q}</li>`).join('')}</ul>` : '<em>No quests completed</em>';
+
+
+
+
+
+        // === Render Progress Bar ===
+        const tierBox = document.getElementById("tierProgressBox");
+        const tierBar = document.getElementById("tierBar");
+        const tierStats = document.getElementById("tierStats");
+        const tierTitle = document.getElementById("tierTitle");
+
+        tierBox.classList.remove("hidden");
+
+        // Pick color by tier
+        tierBar.className = "tier-bar";
+        switch (tier.toLowerCase()) {
+          case "common": tierBar.classList.add("tier-common-bar"); break;
+          case "uncommon": tierBar.classList.add("tier-uncommon-bar"); break;
+          case "rare": tierBar.classList.add("tier-rare-bar"); break;
+          case "epic": tierBar.classList.add("tier-epic-bar"); break;
+          case "legendary": tierBar.classList.add("tier-legendary-bar"); break;
+        }
+
+        // Set width to % progress
+        tierBar.style.width = `${progress}%`;
+
+        // Update text
+        tierTitle.innerHTML = `NEXT DRAW PROJECTION / <span class="${getTierClass(tier)}">${tier.toUpperCase()}</span>`;
+        tierStats.textContent = `${progress}% → ${statsData.weeklyPoints || 0} Weekly Points`;
+
+
+
+        if (alreadyLoggedFlag) {
+          responseBox.innerHTML = '<div class="red"> There are no new changes </div>';
+          statsLoader.style.display = "none";
+          showToast('No new changes', 'info');
+          showToast('No new changes', 'info');
+
+          alreadyLog.innerHTML = `<div class="history-entry"><strong>🎯 Key Tier:</strong> <span class="${tierClass}">${tier}</span><br>
+            <strong>✅ Total Completed:</strong> ${combined.userStats.totalInGameQuestsCompleted || 0}<br>
+            <strong>🧩 Quests Completed:</strong> ${questList}<br><br></div>`;
+          await renderHistory(); return;
+        }
+        statsProgressBar.style.width = "80%";
+        statsProgressText.textContent = "Saving results...";
+        await sleep(1000); // ⏳ show 80% for a moment
+
+        await addDoc(collection(db, "StatsHistoryPrivate"), {
+          authToken: token,
+          ip,
+          userAgent,
+          deviceType,
+          stats: combined,
+          logId,
+          timestamp: new Date(),
+          weeklyPoints: statsData.weeklyPoints || 0,    // ⬅️ store points
+          progressPercentage: progress                  // ⬅️ store %
+        });
+
+        statsLoader.style.display = "none";
+        responseBox.innerHTML = '<div class="green">Request successfully!</div>';
+        showToast('Saved result', 'success');
+        alreadyLog.innerHTML = `<div class="history-entry"><strong>🎯 Key Tier:</strong> <span class="${tierClass}">${tier}</span><br>
+          <strong>✅ Total Completed:</strong> ${combined.userStats.totalInGameQuestsCompleted || 0}<br>
+          <strong>🧩 Quests Completed:</strong> ${questList}<br><br></div>`;
+        await renderHistory();
+      } catch (err) {
+        responseBox.innerHTML = '<div class="red">❌ Unexpected error occurred.</div>'; console.error(err);
+        responseBox.innerHTML = '<div class="red">Error: ' + err.message + '</div>';
+        showToast(err?.message || 'Unexpected error', 'error');
+
+      } finally {
+        statsLoader.style.display = "none"; // ✅ always hide loader
+      }
+    });
+    // Initialize UI
+    buildWeeks();
+    // restore toggles
+    const savedAuto = localStorage.getItem('autoRefreshToggle') === '1';
+    const savedInt = parseInt(localStorage.getItem('autoRefreshInterval') || '300000', 10);
+    document.getElementById('autoRefreshToggle').checked = savedAuto;
+    document.getElementById('autoRefreshInterval').value = String(savedInt);
+    document.getElementById('useCustomRange').checked = localStorage.getItem('useCustomRange') === '1';
+    document.getElementById('customStart').value = localStorage.getItem('customStart') || '';
+    document.getElementById('customEnd').value = localStorage.getItem('customEnd') || '';
+
+    function applyAutoRefresh() {
+      if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+      const enabled = document.getElementById('autoRefreshToggle').checked;
+      const intervalMs = parseInt(document.getElementById('autoRefreshInterval').value, 10);
+      if (enabled) {
+        autoRefreshTimer = setInterval(() => { renderHistory(); }, intervalMs);
+      }
+    }
+
+    document.getElementById('weekFilter').addEventListener('change', (e) => {
+      localStorage.setItem('weekFilter', e.target.value);
+      renderHistory();
+    });
+    document.getElementById('refreshHistoryBtn').addEventListener('click', renderHistory);
+    document.getElementById('autoRefreshToggle').addEventListener('change', (e) => {
+      localStorage.setItem('autoRefreshToggle', e.target.checked ? '1' : '0');
+      applyAutoRefresh();
+    });
+    document.getElementById('autoRefreshInterval').addEventListener('change', (e) => {
+      localStorage.setItem('autoRefreshInterval', e.target.value);
+      applyAutoRefresh();
+    });
+    document.getElementById('useCustomRange').addEventListener('change', (e) => {
+      localStorage.setItem('useCustomRange', e.target.checked ? '1' : '0');
+      renderHistory();
+    });
+    document.getElementById('customStart').addEventListener('change', (e) => {
+      localStorage.setItem('customStart', e.target.value);
+    });
+    document.getElementById('customEnd').addEventListener('change', (e) => {
+      localStorage.setItem('customEnd', e.target.value);
+    });
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      if (!lastHistoryRows.length) { return; }
+      const headers = Object.keys(lastHistoryRows[0]);
+      const lines = [headers.join(',')].concat(
+        lastHistoryRows.map(row => headers.map(h => {
+          const val = (row[h] ?? '').toString().replaceAll('"', '""');
+          return `"${val}"`;
+        }).join(','))
+      );
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'immutable-stats-history.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Exported CSV', 'success');
+    });
+
+    renderHistory();
+    applyAutoRefresh();
+    // listeners moved above during initialization
+
+
+    // =====================
+    // Gems Checker JS (Extended, Fixed ID Handling)
+    // =====================
+    async function renderGemsHistory() {
+      const historyBox = document.getElementById('gemsHistory');
+      historyBox.innerHTML = "";
+
+      const q = query(collection(db, "GemsCheckerHistory"), orderBy("timestamp", "desc"), limit(100));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        historyBox.textContent = "⚠️ No history yet.";
+        return;
+      }
+
+      querySnapshot.forEach(docSnap => {
+        const entry = docSnap.data();
+        const time = entry.timestamp?.toDate
+          ? entry.timestamp.toDate().toLocaleString()
+          : new Date(entry.timestamp).toLocaleString();
+
+        const maskedAddress = entry.address
+          ? `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}`
+          : "Unknown";
+
+        const div = document.createElement("div");
+        div.className = "history-entry";
+        div.innerHTML = `
+      <strong>🕒 ${time}</strong><br>
+      <strong>📌 Address:</strong> ${maskedAddress}<br>
+      <strong>💎 Gems:</strong> ${entry.totalGems || 0}<br>
+      <strong>✨ Daily Claimable:</strong> ${entry.dailyClaim || 0}<br>
+      <strong>ID:</strong> ${entry.id || "ACC ??"}
+    `;
+        historyBox.appendChild(div);
+      });
+    }
+
+    function getIdPrefix() {
+      const dropdown = document.getElementById("idScheme");
+      if (!dropdown) return "ACC"; // fallback
+
+      const val = parseInt(dropdown.value, 10);
+      if (val === 1) {
+        return "ACC";
+      } else {
+        return `ACC.${val - 1}`;
+      }
+    }
+
+    // 🔎 Find the next available ACC number (fills gaps before using max+1)
+    async function getNextAccNumber(idPrefix) {
+      const q = query(collection(db, "GemsCheckerHistory"));
+      const snap = await getDocs(q);
+
+      let usedNumbers = new Set();
+
+      snap.forEach(doc => {
+        const entry = doc.data();
+        if (entry.id && entry.id.startsWith(idPrefix)) {
+          const parts = entry.id.split(" ");
+          const num = parseInt(parts[1], 10);
+          if (!isNaN(num)) {
+            usedNumbers.add(num);
+          }
+        }
+      });
+
+      // find the first missing slot
+      let nextNum = 1;
+      while (usedNumbers.has(nextNum)) {
+        nextNum++;
+      }
+
+      return nextNum;
+    }
+
+    async function fetchGems(address) {
+      try {
+        const res = await fetch(`https://api.immutable.com/v1/rewards/gems/${address}`);
+        if (!res.ok) {
+          console.error("API error for", address);
+          return { totalGems: 0, dailyClaim: 0 };
+        }
+        const data = await res.json();
+        return {
+          totalGems: data?.result?.gems || 0,
+          dailyClaim: data?.result?.daily_gems_claimable || 0
+        };
+      } catch (err) {
+        console.error("Fetch error for", address, err);
+        return { totalGems: 0, dailyClaim: 0 };
+      }
+    }
+
+    document.getElementById('gemsBtn').addEventListener('click', async () => {
+      const textarea = document.getElementById('gemsAddress');
+      const addresses = textarea.value
+        .trim()
+        .split("\n")
+        .map(a => a.trim())
+        .filter(a => /^0x[a-fA-F0-9]{40}$/.test(a));
+      if (!addresses.length) {
+        showToast('Please enter at least one valid address', 'error');
+        const bulkResults = document.getElementById('bulkResults');
+        if (bulkResults) bulkResults.innerHTML = '<div class="red">Please enter at least one valid address</div>';
+        return;
+      }
+
+      const bulkResults = document.getElementById('bulkResults');
+      const loaderBox = document.getElementById('gemsLoader');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+
+      bulkResults.innerHTML = "";
+      loaderBox.style.display = 'block';
+      progressBar.style.width = "0%";
+      progressText.textContent = `Checked 0/${addresses.length}`;
+
+
+
+      const idPrefix = getIdPrefix();
+
+      for (let i = 0; i < addresses.length; i++) {
+        const address = addresses[i];
+        const shortAddr = address.slice(0, 6) + "..." + address.slice(-4);
+
+        // ✅ Check if this address already exists in DB
+        const existingQ = query(collection(db, "GemsCheckerHistory"), where("address", "==", address));
+        const existingSnap = await getDocs(existingQ);
+
+        let accId;
+        if (!existingSnap.empty) {
+          // If address exists, keep its current ID
+          accId = existingSnap.docs[0].data().id;
+        } else {
+          // Otherwise assign the lowest missing number
+          const accNum = await getNextAccNumber(idPrefix);
+          accId = `${idPrefix} ${String(accNum).padStart(2, "0")}`;
+        }
+
+        // ✅ Fetch gems
+        const { totalGems, dailyClaim } = await fetchGems(address);
+
+        const line = document.createElement("div");
+        line.textContent = `ID: ${accId} → ${shortAddr} → 💎 ${totalGems} → ✨ ${dailyClaim}`;
+        bulkResults.appendChild(line);
+
+        // 📝 Save/update doc with stable ID
+        await setDoc(doc(db, "GemsCheckerHistory", address), {
+          address: address,
+          totalGems: totalGems,
+          dailyClaim: dailyClaim,
+          id: accId,
+          timestamp: new Date()
+        });
+
+        // progress update
+        const percent = ((i + 1) / addresses.length) * 100;
+        progressBar.style.width = percent + "%";
+        progressText.textContent = `Checked ${i + 1}/${addresses.length}`;
+
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      loaderBox.style.display = "none";
+      showToast(`Checked ${addresses.length} address(es)`, 'success');
+      renderGemsHistory();
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+    renderGemsHistory();
+
+  </script>
+</body>
+
+
+</html>
