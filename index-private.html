@@ -565,16 +565,17 @@
         <div class="login-card">
             <div class="login-title">Login</div>
             <div class="login-row">
-                <label for="loginUsername">Username</label>
-                <input id="loginUsername" type="text" autocomplete="username" placeholder="Your username">
-                <label for="loginPassphrase">Passphrase</label>
-                <input id="loginPassphrase" type="password" autocomplete="current-password"
-                    placeholder="Your passphrase">
-                <button id="loginBtn">Enter</button>
+                <label for="loginEmail">Email</label>
+                <input id="loginEmail" type="email" autocomplete="username" placeholder="you@example.com">
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password">
+                <label for="registerPassword2">Confirm Password (register only)</label>
+                <input id="registerPassword2" type="password" autocomplete="new-password" placeholder="Repeat password">
+                <button id="loginBtn">Sign In</button>
+                <button id="registerBtn">Register</button>
             </div>
             <div class="login-meta">
-                This is a local login for this browser/device. It helps keep data separated between users on the same
-                PC.
+                Use your Firebase email/password account. Enable Email/Password provider in Firebase Auth.
             </div>
         </div>
     </div>
@@ -583,6 +584,7 @@
     <div id="mainNav" class="nav">
         <button id="btnStats" class="tab-btn active">Immutable Stats Checker</button>
         <button id="btnGems" class="tab-btn">Gems Checker</button>
+        <button id="logoutBtn" class="tab-btn" style="margin-left:auto;">Logout</button>
         <a href="fingerprint_test_cleaned.html">
             <button id="tabFp" class="tab-btn">Web Fingerprints</button>
         </a>
@@ -658,10 +660,6 @@
                 <div id="dailyQuestsCard" class="card" style="padding:14px; margin-top:14px;">
                     <h2 style="margin-bottom:6px;">Daily Quests</h2>
                     <div id="dailyResetInfo" style="color:var(--muted); font-size:0.85rem; margin-bottom:10px;"></div>
-                    <label for="dailyQuestPaste">Paste daily quest list</label>
-                    <textarea id="dailyQuestPaste"
-                        placeholder="Paste quests here...\n\nExample:\nCheck-in daily (Resets 0300 UTC) (Resets in 0h 0m)\n294"></textarea>
-                    <button id="dailyQuestParseBtn">Parse & Update</button>
                     <div id="dailyQuestList" style="margin-top:10px;"></div>
                 </div>
 
@@ -740,7 +738,9 @@
         import {
             getAuth,
             onAuthStateChanged,
-            signInAnonymously
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut
         } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
         import {
             getFirestore,
@@ -789,8 +789,8 @@
         let __remoteDailyPrefetchKeySig = null;
         let __remoteDailyPrefetchInFlight = false;
         function getUserPrefix() {
-            if (!currentUser?.uid) return '__no_user__';
-            return `user:${currentUser.uid}`;
+            if (!firebaseUserUid) return '__no_user__';
+            return `user:${firebaseUserUid}`;
         }
 
         function predictedCacheKey() {
@@ -894,73 +894,10 @@
             window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
         }
 
-        async function setLoggedInUser(username, passphrase) {
-            const u = normalizeUsername(username);
-            const p = (passphrase || '').trim();
-            if (!u || !p) return null;
-            const uid = await sha256Hex(`${u}|${p}`);
-            currentUser = { username: u, uid };
-            sessionStorage.setItem('loggedInUserUid', uid);
-            sessionStorage.setItem('loggedInUsername', u);
-            return currentUser;
-        }
-
-        async function restoreLoggedInUser() {
-            const uid = sessionStorage.getItem('loggedInUserUid');
-            const u = sessionStorage.getItem('loggedInUsername');
-            if (!uid || !u) return null;
-            currentUser = { username: u, uid };
-            return currentUser;
-        }
-
         function getUserScopedPath(collectionName) {
             const uid = firebaseUserUid;
             if (!uid) throw new Error('Not logged in');
             return `Users/${uid}/${collectionName}`;
-        }
-
-        await restoreLoggedInUser();
-        if (!currentUser) {
-            requireLoginUi();
-        } else {
-            showMainUi();
-        }
-
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) {
-            loginBtn.addEventListener('click', async () => {
-                const u = document.getElementById('loginUsername')?.value;
-                const p = document.getElementById('loginPassphrase')?.value;
-                const user = await setLoggedInUser(u, p);
-                if (!user) {
-                    showToast('Please enter username + passphrase', 'error');
-                    return;
-                }
-
-                showMainUi();
-
-                lastPredictedData = loadPredictedCache();
-
-                if (!lastPredictedData) {
-                    const remotePred = await loadRemotePredictedCache();
-                    if (remotePred) {
-                        lastPredictedData = remotePred;
-                        savePredictedCache(remotePred);
-                    }
-                }
-
-                const savedToken = lsGet('authToken') || '';
-                const authEl = document.getElementById('auth');
-                if (authEl) authEl.value = savedToken;
-                await autoRefreshDailyQuestsFromPredicted();
-                renderHistory();
-                renderGemsHistory();
-                renderDailyQuests();
-            });
-        }
-
-        if (!lastPredictedData) {
-            lastPredictedData = loadPredictedCache();
         }
 
         const firebaseConfig = {
@@ -975,21 +912,92 @@
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
         const auth = getAuth(app);
-        const waitForFirebaseAuth = new Promise((resolve) => {
-            onAuthStateChanged(auth, (user) => {
-                firebaseUserUid = user?.uid || null;
-                resolve(user);
-            });
+        const db = getFirestore(app);
+
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user || null;
+            firebaseUserUid = user?.uid || null;
+
+            if (!user) {
+                requireLoginUi();
+                return;
+            }
+
+            showMainUi();
+
+            buildWeeks();
+
+            lastPredictedData = loadPredictedCache();
+            if (!lastPredictedData) {
+                const remotePred = await loadRemotePredictedCache();
+                if (remotePred) {
+                    lastPredictedData = remotePred;
+                    savePredictedCache(remotePred);
+                }
+            }
+
+            const savedToken = lsGet('authToken') || '';
+            const authEl = document.getElementById('auth');
+            if (authEl) authEl.value = savedToken;
+
+            autoRefreshDailyQuestsFromPredicted();
+            renderHistory();
+            renderGemsHistory();
+            renderDailyQuests();
         });
 
-        try {
-            await signInAnonymously(auth);
-            await waitForFirebaseAuth;
-        } catch (e) {
-            console.error('Firebase anonymous sign-in failed:', e);
-            showToast('Firebase auth failed. Firestore may be blocked by rules.', 'error', 6000);
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', async () => {
+                const email = document.getElementById('loginEmail')?.value?.trim();
+                const pass = document.getElementById('loginPassword')?.value || '';
+                if (!email || !pass) {
+                    showToast('Please enter email + password', 'error');
+                    return;
+                }
+                try {
+                    await signInWithEmailAndPassword(auth, email, pass);
+                } catch (e) {
+                    console.error('Firebase sign-in failed:', e);
+                    showToast(e?.message || 'Sign-in failed', 'error', 6000);
+                }
+            });
         }
-        const db = getFirestore(app);
+
+        const registerBtn = document.getElementById('registerBtn');
+        if (registerBtn) {
+            registerBtn.addEventListener('click', async () => {
+                const email = document.getElementById('loginEmail')?.value?.trim();
+                const pass = document.getElementById('loginPassword')?.value || '';
+                const pass2 = document.getElementById('registerPassword2')?.value || '';
+                if (!email || !pass) {
+                    showToast('Please enter email + password', 'error');
+                    return;
+                }
+                if (pass !== pass2) {
+                    showToast('Passwords do not match', 'error');
+                    return;
+                }
+                try {
+                    await createUserWithEmailAndPassword(auth, email, pass);
+                } catch (e) {
+                    console.error('Firebase registration failed:', e);
+                    showToast(e?.message || 'Registration failed', 'error', 6000);
+                }
+            });
+        }
+
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                } catch (e) {
+                    console.error('Logout failed:', e);
+                    showToast(e?.message || 'Logout failed', 'error', 6000);
+                }
+            });
+        }
 
         // Week ranges (dynamic)
         let weekRanges = {};
@@ -1336,7 +1344,7 @@
                     if (!availableBox) return;
 
                     // Preserve previous selection (if any)
-                    const prevMode = document.getElementById("sortFilter")?.value || "default";
+                    const prevMode = document.getElementById("sortFilter")?.value || (lsGet('sortFilterMode') || "default");
 
                     availableBox.innerHTML = `
     <h3>🧩 Available Quests Account Quest</h3>
@@ -1354,18 +1362,31 @@
   `;
 
                     // restore selection
-                    document.getElementById("sortFilter").value = prevMode;
+                    const sortEl = document.getElementById("sortFilter");
+                    sortEl.value = prevMode;
 
                     // re-attach listeners every render
-                    document.getElementById("expandAll").addEventListener("click", () => {
-                        document.querySelectorAll(".quest-list").forEach(list => list.style.display = "block");
-                    });
-                    document.getElementById("collapseAll").addEventListener("click", () => {
-                        document.querySelectorAll(".quest-list").forEach(list => list.style.display = "none");
-                    });
-                    document.getElementById("sortFilter").addEventListener("change", () => {
-                        renderAvailableQuests(statsData);
-                    });
+                    const expandBtn = document.getElementById("expandAll");
+                    const collapseBtn = document.getElementById("collapseAll");
+                    if (expandBtn && !expandBtn.dataset.bound) {
+                        expandBtn.dataset.bound = '1';
+                        expandBtn.addEventListener("click", () => {
+                            document.querySelectorAll(".quest-list").forEach(list => list.style.display = "block");
+                        });
+                    }
+                    if (collapseBtn && !collapseBtn.dataset.bound) {
+                        collapseBtn.dataset.bound = '1';
+                        collapseBtn.addEventListener("click", () => {
+                            document.querySelectorAll(".quest-list").forEach(list => list.style.display = "none");
+                        });
+                    }
+                    if (sortEl && !sortEl.dataset.bound) {
+                        sortEl.dataset.bound = '1';
+                        sortEl.addEventListener("change", () => {
+                            lsSet('sortFilterMode', sortEl.value);
+                            renderAvailableQuests(statsData);
+                        });
+                    }
 
                     // loop games
                     if (statsData.games && Array.isArray(statsData.games)) {
@@ -1419,6 +1440,7 @@
 
                                     const list = document.createElement("div");
                                     list.className = "quest-list";
+                                    list.style.display = "block";
                                     list.innerHTML = `<ul>${availableQuests.map(q => {
                                         let status = "";
 
@@ -1601,7 +1623,6 @@
             }
         });
         // Initialize UI
-        buildWeeks();
         // restore toggles
         const savedAuto = lsGet('autoRefreshToggle') === '1';
         const savedInt = parseInt(lsGet('autoRefreshInterval') || '300000', 10);
@@ -2262,6 +2283,13 @@
                         cb.type = 'checkbox';
                         cb.checked = checked;
                         cb.disabled = (dc.key !== todayKey) || !!found?.autoCompleted;
+                        if (dc.key === todayKey) {
+                            td.style.borderRadius = '8px';
+                            td.style.outline = checked ? '2px solid #22c55e' : '2px solid #ff4d4d';
+                            td.style.outlineOffset = '-2px';
+                        }
+                        cb.style.accentColor = checked ? '#22c55e' : '';
+                        cb.style.transform = 'scale(1.15)';
                         cb.addEventListener('change', () => {
                             const dayStore = loadDailyQuestsForDay(dc.key);
                             const idx = dayStore.quests.findIndex(x => (x?.name || '') === tdName.textContent);
@@ -2273,6 +2301,7 @@
                             saveDailyQuestsForToday(dc.key, dayStore.quests);
                             __remoteDailyCache.set(dc.key, dayStore.quests);
                             saveRemoteDailyQuests(dc.key, dayStore.quests);
+                            renderDailyQuests();
                         });
                         td.appendChild(cb);
                         tr.appendChild(td);
@@ -2293,32 +2322,6 @@
 
             list.innerHTML = '';
             list.appendChild(container);
-        }
-
-        const dailyBtn = document.getElementById('dailyQuestParseBtn');
-        if (dailyBtn) {
-            dailyBtn.addEventListener('click', () => {
-                if (!currentUser?.uid) {
-                    showToast('Please login first', 'error');
-                    return;
-                }
-                const raw = document.getElementById('dailyQuestPaste')?.value || '';
-                const parsed = parseDailyQuestText(raw);
-                const dayKey = getDailyResetKeyUtc(3);
-                const existing = loadDailyQuestsForToday().quests;
-                const merged = parsed.map(p => {
-                    const found = existing.find(e => (e?.name || '') === p.name);
-                    return {
-                        name: p.name,
-                        points: p.points,
-                        autoCompleted: p.autoCompleted,
-                        completed: (p.autoCompleted ? true : (found?.completed || false))
-                    };
-                });
-                saveDailyQuestsForToday(dayKey, merged);
-                renderDailyQuests();
-                showToast('Daily quests updated', 'success');
-            });
         }
 
         setInterval(() => {
@@ -2455,6 +2458,8 @@
             });
 
             saveDailyQuestsForToday(dayKey, merged);
+            __remoteDailyCache.set(dayKey, merged);
+            saveRemoteDailyQuests(dayKey, merged);
             renderDailyQuests();
         }
 
